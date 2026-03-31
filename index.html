@@ -3,699 +3,980 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Финансовый дашборд</title>
+    <title>Финансовый дашборд Pro</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Подключаем Tailwind CSS для красивого дизайна без сборки -->
+    <!-- Tailwind CSS (Script load directly, config after) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Подключаем иконки Lucide -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
     <script src="https://unpkg.com/lucide@latest"></script>
-
     <style>
-        /* Небольшие кастомные стили поверх Tailwind */
+        /* Плавная смена темы */
+        html { transition: background-color 0.3s ease, color 0.3s ease; scroll-behavior: smooth; }
+        
+        /* Кастомный скроллбар */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Убираем стрелочки у input type="number" */
         input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+
+        /* Glassmorphism утилиты */
+        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid rgba(226, 232, 240, 0.8); }
+        .dark .glass { background: rgba(15, 23, 42, 0.8); border-bottom: 1px solid rgba(30, 41, 59, 0.8); }
+
+        /* Анимации (перенесены в CSS для 100% совместимости) */
+        @keyframes slideUp {
+            0% { transform: translateY(20px) scale(0.95); opacity: 0; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
         }
-        .hide-scroll::-webkit-scrollbar {
-            height: 6px;
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
         }
-        .hide-scroll::-webkit-scrollbar-thumb {
-            background-color: #cbd5e1;
-            border-radius: 10px;
+        @keyframes toastIn {
+            0% { transform: translateX(100%); opacity: 0; }
+            100% { transform: translateX(0); opacity: 1; }
         }
+        .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-fade-in { animation: fadeIn 0.2s ease-out; }
+        .animate-toast-in { animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     </style>
 </head>
-<body class="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 p-3 md:p-6">
-
-    <div class="max-w-[1400px] mx-auto space-y-6">
-        
-        <!-- ШАПКА И НАСТРОЙКИ -->
-        <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-5 md:p-7 rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 gap-6">
-            <div class="flex items-center gap-4">
-                <div class="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                    <i data-lucide="wallet" class="w-6 h-6"></i>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 font-sans min-h-screen transition-colors duration-300 selection:bg-blue-500 selection:text-white pb-20">
+    
+    <!-- STICKY HEADER -->
+    <header class="sticky top-0 z-40 glass transition-colors duration-300">
+        <div class="p-4 md:px-8 max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                    <i data-lucide="layers" class="w-6 h-6"></i>
                 </div>
                 <div>
-                    <h1 class="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">Финансовый дашборд</h1>
-                    <p class="text-sm text-slate-500 font-medium mt-0.5">Чистый JS, работает без серверов</p>
+                    <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">CashFlow Pro</h1>
+                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider">Финансовый дашборд</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                <button onclick="app.toggleTheme()" class="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:shadow-md transition-all duration-200" title="Переключить тему">
+                    <div class="block dark:hidden"><i data-lucide="moon" class="w-5 h-5"></i></div>
+                    <div class="hidden dark:block"><i data-lucide="sun" class="w-5 h-5"></i></div>
+                </button>
+                <button onclick="app.openModalForAdd()" class="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-5 py-2.5 rounded-xl font-medium transition-all duration-200 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5">
+                    <i data-lucide="plus" class="w-5 h-5"></i> <span class="hidden sm:inline">Добавить операцию</span><span class="inline sm:hidden">Добавить</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="p-4 md:p-8 max-w-7xl mx-auto space-y-8 mt-4">
+        
+        <!-- ALERTS -->
+        <div id="alerts-container"></div>
+
+        <!-- TOP STATS -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            <!-- 1. Фактический баланс -->
+            <div class="relative overflow-hidden bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all duration-300 group">
+                <div class="absolute -right-6 -top-6 w-24 h-24 bg-blue-100 dark:bg-blue-900/20 rounded-full blur-2xl group-hover:bg-blue-200 dark:group-hover:bg-blue-900/40 transition-colors"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="p-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
+                            <i data-lucide="wallet" class="w-5 h-5"></i>
+                        </div>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Мой баланс</p>
+                    </div>
+                    <div id="balance-container" class="min-h-[40px] flex items-center"></div>
                 </div>
             </div>
             
-            <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-                <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/60 flex-1 lg:min-w-[220px] transition-all focus-within:ring-2 ring-indigo-500/20 focus-within:bg-white">
-                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Баланс на сегодня (₽)</label>
-                    <input type="number" id="currentBalanceInput" placeholder="0" class="w-full bg-transparent font-bold text-xl md:text-2xl outline-none text-slate-800 placeholder-slate-300"/>
+            <!-- 2. Плановые доходы -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all duration-300 group">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl group-hover:scale-110 transition-transform">
+                        <i data-lucide="arrow-down-left" class="w-5 h-5"></i>
+                    </div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Плановые доходы</p>
                 </div>
-                <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/60 flex-1 lg:min-w-[140px] transition-all focus-within:ring-2 ring-indigo-500/20 focus-within:bg-white">
-                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Горизонт (дней)</label>
-                    <input type="number" id="forecastDaysInput" min="7" max="365" class="w-full bg-transparent font-bold text-xl md:text-2xl outline-none text-slate-800"/>
+                <h2 id="stat-planned-income" class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">0 ₽</h2>
+            </div>
+
+            <!-- 3. Плановые расходы -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all duration-300 group">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="p-2.5 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl group-hover:scale-110 transition-transform">
+                        <i data-lucide="arrow-up-right" class="w-5 h-5"></i>
+                    </div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Плановые расходы</p>
+                </div>
+                <h2 id="stat-planned-expense" class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">0 ₽</h2>
+            </div>
+
+            <!-- 4. Ожидаемый баланс -->
+            <div id="stat-expected-card" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                <div id="stat-expected-glow" class="absolute -right-6 -bottom-6 w-24 h-24 rounded-full blur-2xl transition-colors"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div id="stat-expected-icon-bg" class="p-2.5 rounded-xl transition-colors">
+                            <i data-lucide="line-chart" class="w-5 h-5"></i>
+                        </div>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 font-medium" id="stat-expected-label">Прогноз баланса</p>
+                    </div>
+                    <h2 id="stat-expected-balance" class="text-3xl font-bold tracking-tight transition-colors">0 ₽</h2>
                 </div>
             </div>
-        </header>
-
-        <!-- АЛЕРТЫ: ПРОСРОЧКИ И КАССОВЫЕ РАЗРЫВЫ -->
-        <div id="alertsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4 empty:hidden">
-            <!-- Сюда JS вставит алерты -->
         </div>
 
-        <!-- ГРАФИК -->
-        <div id="chartContainer" class="relative w-full overflow-x-auto bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 p-6 hide-scroll">
-            <div class="min-w-[700px] relative" id="chartWrapper">
-                <!-- SVG График и Тултип рендерятся тут -->
+        <!-- CHART SECTION -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 sm:p-6 transition-all duration-300">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-white">Движение средств</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Визуализация прогноза Cash Flow</p>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-900/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
+                    <span class="text-slate-500 dark:text-slate-400 text-sm font-medium px-2">Период:</span>
+                    <select id="forecast-days" onchange="app.setForecastDays(this.value)" class="bg-white dark:bg-slate-800 border-none text-slate-800 dark:text-slate-200 rounded-lg px-3 py-1.5 text-sm font-medium focus:ring-0 shadow-sm cursor-pointer outline-none transition-colors">
+                        <option value="14">2 недели</option>
+                        <option value="30" selected>Месяц</option>
+                        <option value="60">2 месяца</option>
+                        <option value="90">Квартал</option>
+                    </select>
+                </div>
             </div>
+            <div id="chart-container" class="relative w-full h-[320px]"></div>
         </div>
 
-        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
+        <!-- TRANSACTIONS TABLE & FILTERS -->
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden transition-all duration-300">
+            <div class="p-5 border-b border-slate-200 dark:border-slate-700 space-y-5">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        Операции
+                        <span id="tx-count" class="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-xs font-semibold">0</span>
+                    </h2>
+                    
+                    <div class="flex bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl w-full md:w-auto shadow-inner" id="type-filters">
+                        <!-- Type buttons rendered via JS -->
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 dark:bg-slate-900/30 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Категория</label>
+                        <select id="filter-category" onchange="app.setFilter('category', this.value)" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm">
+                            <option value="">Все категории</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">От</label>
+                        <input type="date" id="filter-date-from" onchange="app.setFilter('dateFrom', this.value)" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm text-slate-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">До</label>
+                        <input type="date" id="filter-date-to" onchange="app.setFilter('dateTo', this.value)" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm text-slate-500">
+                    </div>
+                    <div class="flex items-end" id="reset-filter-container">
+                        <!-- Reset Button rendered via JS -->
+                    </div>
+                </div>
+            </div>
             
-            <!-- ФОРМА ДОБАВЛЕНИЯ -->
-            <div class="xl:col-span-1 bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 p-5 md:p-7 h-fit sticky top-6">
-                <div class="flex justify-between items-center mb-5">
-                    <h3 class="text-lg font-bold text-slate-800" id="formTitle">Новая операция</h3>
-                    <button id="cancelEditBtn" class="hidden w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
-                        <i data-lucide="x" class="w-4 h-4"></i>
-                    </button>
-                </div>
+            <div class="overflow-x-auto relative">
+                <table class="w-full text-left border-collapse min-w-[700px]">
+                    <thead>
+                        <tr class="bg-slate-50/80 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                            <th class="py-4 px-6 w-32">Дата</th>
+                            <th class="py-4 px-6">Категория / Источник</th>
+                            <th class="py-4 px-6 text-right w-40">Сумма</th>
+                            <th class="py-4 px-6 w-36">Статус</th>
+                            <th class="py-4 px-6 text-center w-32">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                        <!-- Transactions rendered via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- MODAL OVERLAY -->
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-opacity duration-300 opacity-0">
+        <!-- MODAL CONTENT -->
+        <div id="modal-content" class="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 dark:border-slate-700 transform transition-all duration-300 scale-95 opacity-0">
+            <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/30">
+                <h3 id="modal-title" class="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Новая операция</h3>
+                <button type="button" onclick="app.closeModal()" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <form id="tx-form" onsubmit="app.handleSubmit(event)" class="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                <input type="hidden" id="modal-tx-id">
                 
-                <form id="txForm" class="space-y-5">
-                    <!-- Тип операции -->
-                    <div class="flex p-1 bg-slate-100/80 rounded-2xl" id="typeToggle">
-                        <button type="button" data-type="income" class="type-btn flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-200 bg-white text-emerald-600 shadow-sm">
-                            Поступление
-                        </button>
-                        <button type="button" data-type="expense" class="type-btn flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-200 text-slate-500 hover:text-slate-700">
-                            Расход
-                        </button>
+                <!-- Custom Segmented Control -->
+                <div class="relative flex bg-slate-100 dark:bg-slate-900/80 p-1.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50 shadow-inner">
+                    <div id="modal-type-slider" class="absolute top-1.5 bottom-1.5 w-[calc(50%-0.375rem)] bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200/50 dark:border-slate-700/50 transition-all duration-300 ease-out z-0"></div>
+                    <button type="button" id="btn-type-income" onclick="app.setModalType('income')" class="relative z-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200">Поступление</button>
+                    <button type="button" id="btn-type-expense" onclick="app.setModalType('expense')" class="relative z-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200">Расход</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2 sm:col-span-1">
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Дата операции</label>
+                        <input type="date" id="modal-date" required class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm">
                     </div>
 
-                    <!-- Сумма -->
-                    <div class="space-y-1.5">
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Сумма (₽) *</label>
-                        <input type="number" id="txAmount" required min="1" step="1" placeholder="0"
-                            class="w-full border-2 border-slate-100 bg-slate-50/50 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 focus:bg-white transition-colors font-bold text-lg text-slate-800"/>
-                    </div>
-
-                    <!-- Категория -->
-                    <div class="space-y-2">
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider" id="categoryLabel">Категория *</label>
-                        <input type="text" id="txCategory" required list="categoriesList" placeholder="Например: Закупка, Налоги..."
-                            class="w-full border-2 border-slate-100 bg-slate-50/50 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 focus:bg-white transition-colors font-medium text-sm text-slate-800"/>
-                        <datalist id="categoriesList"></datalist>
-                        
-                        <!-- Быстрые теги -->
-                        <div id="quickTags" class="flex flex-wrap gap-1.5 mt-1"></div>
-                    </div>
-
-                    <!-- Дата -->
-                    <div class="space-y-2 pt-2 border-t border-slate-100">
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Дата *</label>
-                        <input type="date" id="txDate" required
-                            class="w-full border-2 border-slate-100 bg-slate-50/50 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 focus:bg-white transition-colors font-medium text-sm text-slate-800"/>
-                        <div class="flex gap-2">
-                            <button type="button" onclick="setQuickDate(-1)" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200">Вчера</button>
-                            <button type="button" onclick="setQuickDate(0)" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100">Сегодня</button>
-                            <button type="button" onclick="setQuickDate(1)" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200">Завтра</button>
+                    <div class="col-span-2 sm:col-span-1">
+                        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Сумма (₽)</label>
+                        <div class="relative">
+                            <input type="number" id="modal-amount" required min="1" placeholder="0" class="w-full pl-4 pr-10 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm font-semibold text-lg">
+                            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">₽</span>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Статус -->
-                    <div class="space-y-1.5 pt-2 border-t border-slate-100">
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider flex justify-between">
-                            <span>Статус</span>
-                            <span id="autoStatusLabel" class="text-emerald-500">Авто: Факт</span>
-                        </label>
-                        <select id="txStatus" class="w-full border-2 border-slate-100 bg-slate-50/50 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 focus:bg-white transition-colors font-semibold text-sm text-slate-800 appearance-none cursor-pointer">
-                            <option value="completed">✅ Исполнено (Деньги получены/списаны)</option>
-                            <option value="planned">⏳ Ожидается (Только в планах)</option>
-                        </select>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Категория / Источник</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="tag" class="w-4 h-4"></i>
+                        </div>
+                        <input type="text" id="modal-category" required autocomplete="off" placeholder="Введите или выберите ниже..." class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm">
                     </div>
-                    
-                    <!-- Комментарий -->
-                    <div class="space-y-1.5 pt-2 border-t border-slate-100">
-                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Комментарий</label>
-                        <textarea id="txComment" rows="2" placeholder="Дополнительная информация..."
-                            class="w-full border-2 border-slate-100 bg-slate-50/50 rounded-xl px-4 py-2 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-sm text-slate-800 resize-none"></textarea>
-                    </div>
+                    <div id="category-suggestions" class="mt-3 flex flex-wrap gap-2"></div>
+                </div>
 
-                    <button type="submit" id="submitBtn" class="w-full py-3.5 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 shadow-lg mt-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 shadow-emerald-200">
-                        <i data-lucide="plus" class="w-5 h-5" id="submitIcon"></i>
-                        <span id="submitText">Добавить поступление</span>
-                    </button>
-                </form>
-            </div>
-
-            <!-- СПИСОК ОПЕРАЦИЙ -->
-            <div class="xl:col-span-2 bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 p-5 md:p-7 flex flex-col">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                    <h3 class="text-lg font-bold text-slate-800">Операции</h3>
-                    
-                    <div class="flex flex-wrap bg-slate-50 p-1 rounded-xl border border-slate-200/60 gap-1 w-full sm:w-auto">
-                        <select id="filterType" class="text-xs font-bold bg-transparent border-none outline-none text-slate-600 pl-2 pr-6 py-1.5 cursor-pointer flex-1 sm:flex-none">
-                            <option value="all">Все типы</option>
-                            <option value="income">Поступления</option>
-                            <option value="expense">Расходы</option>
-                        </select>
-                        <div class="hidden sm:block w-px bg-slate-200 mx-1"></div>
-                        <select id="filterStatus" class="text-xs font-bold bg-transparent border-none outline-none text-slate-600 pl-2 pr-6 py-1.5 cursor-pointer flex-1 sm:flex-none">
-                            <option value="all">Все статусы</option>
-                            <option value="planned">Ожидаются</option>
-                            <option value="completed">Исполнены</option>
-                        </select>
-                        <div class="hidden sm:block w-px bg-slate-200 mx-1"></div>
-                        <select id="filterCategory" class="text-xs font-bold bg-transparent border-none outline-none text-slate-600 pl-2 pr-6 py-1.5 cursor-pointer max-w-[140px] truncate flex-1 sm:flex-none">
-                            <option value="all">Все категории</option>
-                        </select>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Комментарий <span class="text-slate-400 font-normal lowercase">(необяз.)</span></label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 pt-3 pointer-events-none text-slate-400">
+                            <i data-lucide="message-square" class="w-4 h-4"></i>
+                        </div>
+                        <textarea id="modal-comment" rows="2" placeholder="Краткое описание" class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm resize-none"></textarea>
                     </div>
                 </div>
 
-                <div id="transactionsList" class="flex-1 overflow-x-auto">
-                    <!-- Транзакции будут отрендерены здесь JS-скриптом -->
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="app.closeModal()" class="flex-1 px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Отмена</button>
+                    <button type="submit" id="modal-submit-btn" class="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white rounded-xl font-semibold transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5">Добавить</button>
                 </div>
-            </div>
-
+            </form>
         </div>
     </div>
 
-    <!-- ОСНОВНОЙ СКРИПТ (ЛОГИКА) -->
+    <!-- TOAST CONTAINER -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- ВЕСЬ JS КОД -->
     <script>
-        // --- КОНСТАНТЫ И УТИЛИТЫ ---
-        const formatCurrency = (amount) => {
-            return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
-        };
-        const formatDate = (dateString) => new Date(dateString).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-        const getTodayString = () => new Date().toISOString().split('T')[0];
-        const addDays = (dateString, days) => {
-            const d = new Date(dateString);
-            d.setDate(d.getDate() + days);
-            return d.toISOString().split('T')[0];
-        };
-        const getRelativeDateLabel = (dateString) => {
-            const today = getTodayString();
-            if (dateString === today) return 'Сегодня';
-            if (dateString === addDays(today, 1)) return 'Завтра';
-            if (dateString === addDays(today, -1)) return 'Вчера';
-            return `${formatDate(dateString)}, ${new Date(dateString).toLocaleDateString('ru-RU', { weekday: 'short' })}`;
+        // --- УТИЛИТЫ ---
+        const utils = {
+            formatMoney: (amount) => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(amount),
+            formatDate: (dateString) => {
+                const [year, month, day] = dateString.split('-');
+                return new Date(year, month - 1, day).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+            },
+            getDateOffset: (days) => {
+                const date = new Date();
+                date.setDate(date.getDate() + days);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
         };
 
-        const defaultCategories = ['Закупка товара', 'Реклама', 'Кредит / займ', 'Логистика', 'Налоги', 'Прочее', 'Ozon', 'Wildberries', 'Яндекс.Маркет'];
-        const quickCategories = {
-            income: ['Ozon', 'Wildberries', 'Яндекс.Маркет', 'Прочее'],
-            expense: ['Закупка товара', 'Логистика', 'Реклама', 'Налоги']
-        };
+        const INCOME_CATEGORIES = ["Зарплата", "Фриланс", "Кредит", "Возврат долга", "Продажа"];
+        const EXPENSE_CATEGORIES = ["Продукты", "Логистика", "Аренда", "Зарплата сотрудникам", "Подписки", "Развлечения", "Транспорт"];
 
         // --- СОСТОЯНИЕ ПРИЛОЖЕНИЯ ---
-        let state = {
-            transactions: JSON.parse(localStorage.getItem('fin_dashboard_txs')) || [],
-            currentBalance: Number(localStorage.getItem('fin_dashboard_balance')) || 0,
+        const state = {
+            currentBalance: Number(localStorage.getItem('finDash_balance')) || 0,
+            transactions: JSON.parse(localStorage.getItem('finDash_transactions')) || [],
             forecastDays: 30,
-            
-            form: {
-                id: null,
-                type: 'income', // income | expense
-                amount: '',
-                date: getTodayString(),
-                category: '',
-                status: 'completed',
-                comment: ''
-            },
-            
             filters: {
                 type: 'all',
-                status: 'all',
-                category: 'all'
+                category: '',
+                dateFrom: '',
+                dateTo: ''
             },
-            
-            calculated: { chartData: [], cashGaps: [], overdueTxs: [] },
-            hoveredPoint: null
-        };
-
-        // Кэширование DOM элементов
-        const els = {
-            currentBalanceInput: document.getElementById('currentBalanceInput'),
-            forecastDaysInput: document.getElementById('forecastDaysInput'),
-            alertsContainer: document.getElementById('alertsContainer'),
-            chartWrapper: document.getElementById('chartWrapper'),
-            transactionsList: document.getElementById('transactionsList'),
-            
-            // Форма
-            form: document.getElementById('txForm'),
-            formTitle: document.getElementById('formTitle'),
-            cancelEditBtn: document.getElementById('cancelEditBtn'),
-            txAmount: document.getElementById('txAmount'),
-            txCategory: document.getElementById('txCategory'),
-            txDate: document.getElementById('txDate'),
-            txStatus: document.getElementById('txStatus'),
-            txComment: document.getElementById('txComment'),
-            typeBtns: document.querySelectorAll('.type-btn'),
-            quickTags: document.getElementById('quickTags'),
-            categoriesList: document.getElementById('categoriesList'),
-            autoStatusLabel: document.getElementById('autoStatusLabel'),
-            submitBtn: document.getElementById('submitBtn'),
-            submitText: document.getElementById('submitText'),
-            submitIcon: document.getElementById('submitIcon'),
-            
-            // Фильтры
-            filterType: document.getElementById('filterType'),
-            filterStatus: document.getElementById('filterStatus'),
-            filterCategory: document.getElementById('filterCategory')
-        };
-
-        // --- ЛОГИКА РАСЧЕТОВ ---
-        function calculateData() {
-            const data = [];
-            const gaps = [];
-            const overdue = [];
-            let runningBalance = state.currentBalance;
-            const startDate = getTodayString();
-
-            // Просрочки
-            state.transactions.forEach(tx => {
-                if (tx.status === 'planned' && tx.date < startDate) overdue.push(tx);
-            });
-
-            // Группировка
-            const txByDate = state.transactions.reduce((acc, tx) => {
-                if (!acc[tx.date]) acc[tx.date] = { incomes: [], expenses: [] };
-                if (tx.type === 'income') acc[tx.date].incomes.push(tx);
-                else acc[tx.date].expenses.push(tx);
-                return acc;
-            }, {});
-
-            for (let i = 0; i <= state.forecastDays; i++) {
-                const currentDate = addDays(startDate, i);
-                const dayTxs = txByDate[currentDate] || { incomes: [], expenses: [] };
-                
-                const dayIncomeSum = dayTxs.incomes.reduce((sum, tx) => sum + Number(tx.amount), 0);
-                const dayExpenseSum = dayTxs.expenses.reduce((sum, tx) => sum + Number(tx.amount), 0);
-                
-                runningBalance += dayIncomeSum - dayExpenseSum;
-
-                if (runningBalance < 0) gaps.push({ date: currentDate, amountMissing: Math.abs(runningBalance) });
-
-                data.push({
-                    date: currentDate,
-                    balance: runningBalance,
-                    dayIncomeSum, dayExpenseSum,
-                    hasTransactions: dayTxs.incomes.length > 0 || dayTxs.expenses.length > 0
-                });
-            }
-
-            state.calculated = { chartData: data, cashGaps: gaps, overdueTxs: overdue };
-            
-            // Сохраняем в локальное хранилище
-            localStorage.setItem('fin_dashboard_txs', JSON.stringify(state.transactions));
-            localStorage.setItem('fin_dashboard_balance', state.currentBalance.toString());
-        }
-
-        // --- РЕНДЕРИНГ ---
-        function renderApp() {
-            calculateData();
-            renderHeader();
-            renderAlerts();
-            renderChart();
-            renderForm();
-            renderList();
-            renderFilters();
-            lucide.createIcons(); // Перерисовываем иконки после вставки HTML
-        }
-
-        function renderHeader() {
-            els.currentBalanceInput.value = state.currentBalance || '';
-            els.forecastDaysInput.value = state.forecastDays;
-        }
-
-        function renderAlerts() {
-            let html = '';
-            
-            if (state.calculated.overdueTxs.length > 0) {
-                html += `
-                <div class="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/60 rounded-3xl p-5 shadow-sm">
-                    <h3 class="text-orange-800 font-bold flex items-center gap-2 mb-3 text-sm md:text-base">
-                        <i data-lucide="clock" class="w-5 h-5 text-orange-600"></i>
-                        Забытые операции (${state.calculated.overdueTxs.length})
-                    </h3>
-                    <div class="flex flex-wrap gap-2">
-                        ${state.calculated.overdueTxs.slice(0, 2).map(tx => `
-                            <div class="bg-white/60 text-xs font-semibold px-3 py-1.5 rounded-lg border border-orange-100 text-orange-800 flex items-center gap-2 cursor-pointer hover:bg-white" onclick="editTransaction('${tx.id}')">
-                                ${tx.category} <span class="${tx.type === 'expense' ? 'text-rose-500' : 'text-emerald-500'}">${tx.type === 'expense' ? '-' : '+'}${tx.amount} ₽</span>
-                            </div>
-                        `).join('')}
-                        ${state.calculated.overdueTxs.length > 2 ? `<div class="text-xs text-orange-600 font-medium py-1.5 px-1">и еще ${state.calculated.overdueTxs.length - 2}</div>` : ''}
-                    </div>
-                </div>`;
-            }
-
-            if (state.calculated.cashGaps.length > 0) {
-                html += `
-                <div class="bg-gradient-to-r from-rose-50 to-red-50 border border-rose-200/60 rounded-3xl p-5 shadow-sm ${state.calculated.overdueTxs.length === 0 ? 'md:col-span-2' : ''}">
-                    <h3 class="text-rose-800 font-bold flex items-center gap-2 mb-3 text-sm md:text-base">
-                        <i data-lucide="alert-triangle" class="w-5 h-5 text-rose-600"></i>
-                        Угроза кассового разрыва (${state.calculated.cashGaps.length} дн.)
-                    </h3>
-                    <div class="flex flex-wrap gap-2">
-                        ${state.calculated.cashGaps.slice(0, 3).map(gap => `
-                            <div class="bg-white/60 text-xs font-semibold px-3 py-1.5 rounded-lg border border-rose-100 text-rose-800 flex items-center gap-2">
-                                ${formatDate(gap.date)} <span class="text-rose-600 font-bold">-${gap.amountMissing} ₽</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>`;
-            }
-
-            els.alertsContainer.innerHTML = html;
-        }
-
-        function renderChart() {
-            const data = state.calculated.chartData;
-            if (data.length === 0) {
-                els.chartWrapper.innerHTML = '';
-                return;
-            }
-
-            const width = 1000, height = 300;
-            const padding = { top: 20, right: 30, bottom: 40, left: 90 };
-            const chartW = width - padding.left - padding.right;
-            const chartH = height - padding.top - padding.bottom;
-
-            const balances = data.map(d => d.balance);
-            const minBalance = Math.min(0, ...balances, state.currentBalance - 5000); 
-            const maxBalance = Math.max(10000, ...balances, state.currentBalance + 5000); 
-            const range = maxBalance - minBalance || 10000;
-
-            const getX = (i) => padding.left + (i / (data.length - 1)) * chartW;
-            const getY = (val) => padding.top + chartH - ((val - minBalance) / range) * chartH;
-
-            const pathD = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.balance)}`).join(' ');
-            const zeroPercent = range === 0 ? 0 : Math.max(0, Math.min(100, (maxBalance / range) * 100));
-            const yZero = getY(0);
-
-            let gridHtml = '';
-            for(let i=0; i<5; i++) {
-                const yVal = minBalance + (range * i) / 4;
-                const yPos = getY(yVal);
-                gridHtml += `
-                    <line x1="${padding.left}" y1="${yPos}" x2="${width - padding.right}" y2="${yPos}" stroke="#f1f5f9" stroke-width="1" />
-                    <text x="${padding.left - 15}" y="${yPos + 4}" text-anchor="end" font-size="11" fill="#94a3b8" font-weight="500">${formatCurrency(yVal).replace(',00', '')}</text>
-                `;
-            }
-
-            let pointsHtml = '';
-            let hoverZonesHtml = '';
-            data.forEach((d, i) => {
-                const xPos = getX(i);
-                const showDate = i % Math.max(1, Math.ceil(data.length / 10)) === 0 || i === data.length - 1;
-                
-                if (showDate) {
-                    pointsHtml += `<text x="${xPos}" y="${height - 5}" text-anchor="middle" font-size="11" fill="#64748b" font-weight="500">${formatDate(d.date)}</text>`;
-                }
-                if (d.hasTransactions) {
-                    pointsHtml += `<circle cx="${xPos}" cy="${getY(d.balance)}" r="3.5" fill="#fff" stroke="${d.balance >= 0 ? '#10b981' : '#f43f5e'}" stroke-width="2.5" filter="url(#shadow)" id="circle-${i}" class="transition-all duration-200"></circle>`;
-                }
-
-                // Невидимые зоны для наведения мыши
-                hoverZonesHtml += `<rect x="${xPos - chartW / data.length / 2}" y="${padding.top}" width="${chartW / data.length}" height="${chartH}" fill="transparent" class="cursor-pointer" onmouseenter="handleChartHover(${i})" onmouseleave="handleChartHover(null)"></rect>`;
-            });
-
-            // Тултип HTML
-            let tooltipHtml = '';
-            if (state.hoveredPoint !== null) {
-                const d = data[state.hoveredPoint];
-                tooltipHtml = `
-                    <line x1="${getX(state.hoveredPoint)}" y1="${padding.top}" x2="${getX(state.hoveredPoint)}" y2="${height - padding.bottom}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,3" opacity="0.6" pointer-events="none"></line>
-                    <div class="absolute bg-slate-800 text-white p-3.5 rounded-xl shadow-xl text-xs z-10 pointer-events-none transform -translate-x-1/2 -translate-y-full mt-[-15px] min-w-[160px] border border-slate-700/50"
-                         style="left: max(10%, min(90%, ${(state.hoveredPoint / (data.length - 1)) * 100}%)); top: 50%;">
-                        <div class="font-bold border-b border-slate-600/50 pb-1.5 mb-1.5 text-slate-200">${getRelativeDateLabel(d.date)}</div>
-                        <div class="space-y-1">
-                            <p class="flex justify-between gap-3"><span class="text-slate-400">Баланс:</span> <span class="font-bold ${d.balance < 0 ? 'text-rose-400' : 'text-emerald-400'}">${formatCurrency(d.balance)}</span></p>
-                            ${d.dayIncomeSum > 0 ? `<p class="flex justify-between gap-3"><span class="text-slate-400">Приход:</span> <span class="text-emerald-400">+${formatCurrency(d.dayIncomeSum)}</span></p>` : ''}
-                            ${d.dayExpenseSum > 0 ? `<p class="flex justify-between gap-3"><span class="text-slate-400">Расход:</span> <span class="text-rose-400">-${formatCurrency(d.dayExpenseSum)}</span></p>` : ''}
-                        </div>
-                    </div>
-                `;
-            }
-
-            els.chartWrapper.innerHTML = `
-                <svg viewBox="0 0 ${width} ${height}" class="w-full h-auto overflow-visible font-sans">
-                    <defs>
-                        <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="${zeroPercent}%" stop-color="#10b981" />
-                            <stop offset="${zeroPercent}%" stop-color="#f43f5e" />
-                        </linearGradient>
-                        <linearGradient id="areaPos" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981" stop-opacity="0.15"/><stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/></linearGradient>
-                        <linearGradient id="areaNeg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f43f5e" stop-opacity="0.0"/><stop offset="100%" stop-color="#f43f5e" stop-opacity="0.15"/></linearGradient>
-                        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.06" /></filter>
-                        <clipPath id="cPos"><rect x="0" y="0" width="${width}" height="${yZero}" /></clipPath>
-                        <clipPath id="cNeg"><rect x="0" y="${yZero}" width="${width}" height="${height - yZero}" /></clipPath>
-                    </defs>
-                    ${gridHtml}
-                    <path d="${pathD} L ${getX(data.length - 1)} ${yZero} L ${getX(0)} ${yZero} Z" fill="url(#areaPos)" clip-path="url(#cPos)" />
-                    <path d="${pathD} L ${getX(data.length - 1)} ${yZero} L ${getX(0)} ${yZero} Z" fill="url(#areaNeg)" clip-path="url(#cNeg)" />
-                    <line x1="${padding.left}" y1="${yZero}" x2="${width - padding.right}" y2="${yZero}" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4" />
-                    <path d="${pathD}" fill="none" stroke="url(#lineGrad)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#shadow)" />
-                    ${pointsHtml}
-                    ${hoverZonesHtml}
-                </svg>
-                ${tooltipHtml}
-            `;
-            
-            // Если есть наведенная точка, увеличиваем её кружок
-            if(state.hoveredPoint !== null) {
-                const circle = document.getElementById(`circle-${state.hoveredPoint}`);
-                if(circle) circle.setAttribute('r', '6');
-            }
-        }
-
-        // Вызывается из HTML (onmouseenter/leave)
-        window.handleChartHover = function(index) {
-            if (state.hoveredPoint !== index) {
-                state.hoveredPoint = index;
-                renderChart();
+            ui: {
+                theme: localStorage.getItem('finDash_theme') || 'light',
+                isEditingBalance: false,
+                tempBalance: 0,
+                modalType: 'income',
+                activeChartPoint: null 
             }
         };
 
-        function renderForm() {
-            // Кнопки типа
-            els.typeBtns.forEach(btn => {
-                const isActive = btn.dataset.type === state.form.type;
-                if (isActive) {
-                    btn.className = `type-btn flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-200 bg-white shadow-sm ${state.form.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`;
+        // --- ОСНОВНАЯ ЛОГИКА ---
+        const app = {
+            init() {
+                if (state.ui.theme === 'dark') {
+                    document.documentElement.classList.add('dark');
                 } else {
-                    btn.className = `type-btn flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-200 text-slate-500 hover:text-slate-700`;
+                    document.documentElement.classList.remove('dark');
                 }
-            });
+                this.renderAll();
+            },
 
-            // Значения инпутов
-            els.txAmount.value = state.form.amount;
-            els.txDate.value = state.form.date;
-            els.txCategory.value = state.form.category;
-            els.txStatus.value = state.form.status;
-            els.txComment.value = state.form.comment;
+            saveState() {
+                localStorage.setItem('finDash_balance', state.currentBalance.toString());
+                localStorage.setItem('finDash_transactions', JSON.stringify(state.transactions));
+            },
 
-            // Умный статус текст
-            const isFuture = state.form.date > getTodayString();
-            els.autoStatusLabel.textContent = isFuture ? 'Авто: План' : 'Авто: Факт';
-            els.autoStatusLabel.className = isFuture ? 'text-indigo-500' : 'text-emerald-500';
+            toggleTheme() {
+                const isDark = document.documentElement.classList.contains('dark');
+                if (isDark) {
+                    document.documentElement.classList.remove('dark');
+                    state.ui.theme = 'light';
+                } else {
+                    document.documentElement.classList.add('dark');
+                    state.ui.theme = 'dark';
+                }
+                localStorage.setItem('finDash_theme', state.ui.theme);
+                this.renderChart(); // Обновляем цвета графика
+            },
 
-            // Теги
-            els.quickTags.innerHTML = quickCategories[state.form.type].map(tag => 
-                `<button type="button" onclick="setQuickCategory('${tag}')" class="text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-md transition-colors">${tag}</button>`
-            ).join('');
+            showToast(title, message, type = 'success') {
+                const container = document.getElementById('toast-container');
+                const toast = document.createElement('div');
+                
+                const icons = {
+                    success: '<div class="p-1.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-lg"><i data-lucide="check-circle-2" class="w-5 h-5"></i></div>',
+                    error: '<div class="p-1.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-lg"><i data-lucide="alert-circle" class="w-5 h-5"></i></div>',
+                    info: '<div class="p-1.5 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-lg"><i data-lucide="info" class="w-5 h-5"></i></div>'
+                };
 
-            // Даталист
-            els.categoriesList.innerHTML = defaultCategories.map(c => `<option value="${c}"></option>`).join('');
+                toast.className = `animate-toast-in pointer-events-auto flex items-start gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-2xl p-4 w-[320px] transform transition-all duration-300`;
+                toast.innerHTML = `
+                    ${icons[type]}
+                    <div class="flex-1 pt-0.5">
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-white">${title}</h4>
+                        ${message ? `<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">${message}</p>` : ''}
+                    </div>
+                    <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                `;
+                
+                container.appendChild(toast);
+                lucide.createIcons();
 
-            // Состояния редактирования
-            els.formTitle.textContent = state.form.id ? 'Редактировать' : 'Новая операция';
-            els.cancelEditBtn.classList.toggle('hidden', !state.form.id);
-            
-            // Кнопка сабмита
-            els.submitBtn.className = `w-full py-3.5 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 shadow-lg mt-2 ${state.form.type === 'income' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 shadow-emerald-200' : 'bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 shadow-rose-200'}`;
-            els.submitIcon.setAttribute('data-lucide', state.form.id ? 'check-circle' : 'plus');
-            els.submitText.textContent = state.form.id ? 'Сохранить изменения' : (state.form.type === 'income' ? 'Добавить поступление' : 'Добавить расход');
-        }
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateX(100%)';
+                    setTimeout(() => toast.remove(), 300);
+                }, 4000);
+            },
 
-        // Вызываются из HTML
-        window.setQuickDate = function(days) {
-            state.form.date = addDays(getTodayString(), days);
-            state.form.status = state.form.date > getTodayString() ? 'planned' : 'completed';
-            renderForm();
-        };
-        window.setQuickCategory = function(cat) {
-            state.form.category = cat;
-            renderForm();
-        };
+            // --- РЕНДЕРИНГ ---
+            renderAll() {
+                this.renderBalance();
+                this.renderStatsAndAlerts();
+                this.renderChart();
+                this.renderTableAndFilters();
+                lucide.createIcons();
+            },
 
-        function renderList() {
-            let filtered = state.transactions
-                .filter(tx => state.filters.type === 'all' || tx.type === state.filters.type)
-                .filter(tx => state.filters.status === 'all' || tx.status === state.filters.status)
-                .filter(tx => state.filters.category === 'all' || tx.category === state.filters.category)
-                .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-            if (filtered.length === 0) {
-                els.transactionsList.innerHTML = `
-                    <div class="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-8 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
-                        <div class="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-300 mb-4"><i data-lucide="inbox" class="w-8 h-8"></i></div>
-                        <h4 class="text-base font-bold text-slate-700 mb-1">Здесь пока пусто</h4>
-                        <p class="text-sm text-slate-500 max-w-sm">Добавьте вашу первую операцию слева.</p>
-                    </div>`;
-                return;
-            }
-
-            // Группировка
-            const grouped = {};
-            filtered.forEach(tx => {
-                if (!grouped[tx.date]) grouped[tx.date] = [];
-                grouped[tx.date].push(tx);
-            });
-
-            let html = '<div class="space-y-6 pb-4">';
-            const todayStr = getTodayString();
-
-            for (const [dateStr, txs] of Object.entries(grouped)) {
-                html += `
-                    <div class="space-y-2">
-                        <div class="flex items-center gap-3 sticky top-0 bg-white/90 backdrop-blur-sm py-2 z-10 border-b border-slate-100">
-                            <div class="text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-3 py-1 rounded-md">${getRelativeDateLabel(dateStr)}</div>
-                            <div class="h-px bg-slate-100 flex-1"></div>
+            renderBalance() {
+                const container = document.getElementById('balance-container');
+                if (state.ui.isEditingBalance) {
+                    container.innerHTML = `
+                        <div class="flex items-center gap-2 w-full animate-fade-in">
+                            <div class="relative flex-1">
+                                <input type="number" id="temp-balance-input" value="${state.ui.tempBalance}" class="w-full bg-slate-50 dark:bg-slate-900 border-2 border-blue-500 text-slate-900 dark:text-white rounded-lg px-3 py-1.5 text-xl font-bold focus:outline-none shadow-sm" autofocus onkeydown="if(event.key==='Enter') app.saveBalance()">
+                            </div>
+                            <button onclick="app.saveBalance()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-colors shadow-sm"><i data-lucide="check" class="w-5 h-5"></i></button>
+                            <button onclick="app.cancelEditBalance()" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 p-2 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
                         </div>
-                        <div class="grid gap-2">
-                            ${txs.map(tx => {
-                                const isOverdue = tx.status === 'planned' && tx.date < todayStr;
-                                return `
-                                <div class="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors group">
-                                    <div class="flex items-center gap-4 flex-1 min-w-0">
-                                        <button onclick="toggleStatus('${tx.id}')" class="shrink-0 focus:outline-none flex items-center justify-center w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-200 transition-colors">
-                                            ${tx.status === 'completed' ? '<i data-lucide="check-circle" class="w-5 h-5 text-emerald-500"></i>' : '<i data-lucide="circle" class="w-5 h-5 text-slate-300 group-hover:text-slate-400"></i>'}
-                                        </button>
-                                        <div class="min-w-0 flex-1">
-                                            <div class="flex items-center gap-2">
-                                                <span class="text-sm font-bold text-slate-800 truncate">${tx.category}</span>
-                                                ${isOverdue ? '<span class="shrink-0 text-[10px] font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Просрочено</span>' : ''}
-                                                ${!isOverdue && tx.status === 'planned' ? '<span class="shrink-0 text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">План</span>' : ''}
-                                            </div>
-                                            ${tx.comment ? `<div class="text-xs font-medium text-slate-500 truncate mt-0.5">${tx.comment}</div>` : ''}
-                                        </div>
-                                    </div>
-                                    <div class="flex items-center gap-4 shrink-0 pl-4">
-                                        <div class="text-base font-bold whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-800'}">
-                                            ${tx.type === 'income' ? '+' : '-'} ${formatCurrency(tx.amount)}
-                                        </div>
-                                        <div class="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onclick="editTransaction('${tx.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 bg-slate-50 sm:bg-transparent hover:bg-indigo-50 hover:text-indigo-600 transition-colors"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
-                                            <button onclick="deleteTransaction('${tx.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 bg-slate-50 sm:bg-transparent hover:bg-rose-50 hover:text-rose-600 transition-colors"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
-                                        </div>
-                                    </div>
-                                </div>`;
-                            }).join('')}
+                    `;
+                    setTimeout(() => {
+                        const input = document.getElementById('temp-balance-input');
+                        input.focus();
+                        input.select();
+                    }, 0);
+                } else {
+                    container.innerHTML = `
+                        <div class="flex items-center gap-3 group cursor-pointer w-full" onclick="app.editBalance()">
+                            <h2 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">${utils.formatMoney(state.currentBalance)}</h2>
+                            <div class="p-1.5 rounded-md opacity-0 group-hover:opacity-100 group-hover:bg-slate-100 dark:group-hover:bg-slate-800 transition-all">
+                                <i data-lucide="pencil" class="w-4 h-4 text-slate-400 group-hover:text-blue-500"></i>
+                            </div>
                         </div>
-                    </div>`;
+                    `;
+                }
+                lucide.createIcons();
+            },
+
+            calculateForecast() {
+                const data = [];
+                let runningBalance = Number(state.currentBalance);
+                let firstGap = null;
+
+                for (let i = 0; i <= state.forecastDays; i++) {
+                    const targetDate = utils.getDateOffset(i);
+                    const dayTxs = state.transactions.filter(t => t.date === targetDate && t.status === 'planned');
+                    
+                    const dayIncome = dayTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
+                    const dayExpense = dayTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
+                    
+                    runningBalance += dayIncome;
+                    runningBalance -= dayExpense;
+
+                    if (runningBalance < 0 && !firstGap) {
+                        firstGap = { date: targetDate, deficit: Math.abs(runningBalance) };
+                    }
+
+                    data.push({
+                        dayIndex: i,
+                        date: targetDate,
+                        label: utils.formatDate(targetDate),
+                        balance: runningBalance,
+                        income: dayIncome,
+                        expense: dayExpense,
+                        isGap: runningBalance < 0
+                    });
+                }
+
+                return { chartData: data, firstGap, finalBalance: runningBalance };
+            },
+
+            renderStatsAndAlerts() {
+                const forecast = this.calculateForecast();
+                
+                // Alerts
+                const alertsContainer = document.getElementById('alerts-container');
+                if (forecast.firstGap) {
+                    alertsContainer.innerHTML = `
+                        <div class="bg-gradient-to-r from-rose-50 to-red-50 dark:from-rose-900/20 dark:to-red-900/10 border border-rose-200 dark:border-rose-800/50 p-4 rounded-2xl flex items-start sm:items-center gap-4 shadow-sm animate-fade-in">
+                            <div class="p-2.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-xl shrink-0">
+                                <i data-lucide="siren" class="w-6 h-6 animate-pulse"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-bold text-rose-900 dark:text-rose-200 text-sm sm:text-base">Внимание: Кассовый разрыв!</h3>
+                                <p class="text-sm text-rose-700 dark:text-rose-300 mt-0.5">Ожидается дефицит средств <strong>${utils.formatDate(forecast.firstGap.date)}</strong>. Не хватает: <span class="font-bold border-b border-rose-300 border-dashed">${utils.formatMoney(forecast.firstGap.deficit)}</span></p>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    alertsContainer.innerHTML = '';
+                }
+
+                // Stats
+                const plannedIncome = state.transactions.filter(t => t.type === 'income' && t.status === 'planned').reduce((s, t) => s + Number(t.amount), 0);
+                const plannedExpense = state.transactions.filter(t => t.type === 'expense' && t.status === 'planned').reduce((s, t) => s + Number(t.amount), 0);
+                
+                document.getElementById('stat-planned-income').textContent = utils.formatMoney(plannedIncome);
+                document.getElementById('stat-planned-expense').textContent = utils.formatMoney(plannedExpense);
+                document.getElementById('stat-expected-balance').textContent = utils.formatMoney(forecast.finalBalance);
+                document.getElementById('stat-expected-label').textContent = `Прогноз (+${state.forecastDays}д)`;
+                
+                const expectedCard = document.getElementById('stat-expected-card');
+                const expectedGlow = document.getElementById('stat-expected-glow');
+                const expectedBg = document.getElementById('stat-expected-icon-bg');
+                const expectedText = document.getElementById('stat-expected-balance');
+
+                if (forecast.finalBalance >= 0) {
+                    expectedGlow.className = 'absolute -right-6 -top-6 w-24 h-24 rounded-full blur-2xl transition-colors bg-indigo-100 dark:bg-indigo-900/20 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-900/40';
+                    expectedBg.className = 'p-2.5 rounded-xl transition-colors bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform';
+                    expectedText.className = 'text-3xl font-bold tracking-tight transition-colors text-slate-900 dark:text-white';
+                } else {
+                    expectedGlow.className = 'absolute -right-6 -top-6 w-24 h-24 rounded-full blur-2xl transition-colors bg-rose-100 dark:bg-rose-900/20 group-hover:bg-rose-200 dark:group-hover:bg-rose-900/40';
+                    expectedBg.className = 'p-2.5 rounded-xl transition-colors bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 group-hover:scale-110 transition-transform';
+                    expectedText.className = 'text-3xl font-bold tracking-tight transition-colors text-rose-600 dark:text-rose-400';
+                }
+            },
+
+            setActiveChartPoint(index) {
+                state.ui.activeChartPoint = index;
+                this.renderChart();
+            },
+
+            renderChart() {
+                const container = document.getElementById('chart-container');
+                const { chartData } = this.calculateForecast();
+                
+                if (chartData.length === 0) {
+                    container.innerHTML = '<div class="absolute inset-0 flex items-center justify-center text-slate-400 text-sm">Нет данных для прогноза</div>';
+                    return;
+                }
+
+                // Извлекаем размеры контейнера, но для SVG задаем viewBox
+                const width = 900;
+                const height = 320;
+                const paddingX = 30;
+                const paddingY = 40;
+                const isDark = document.documentElement.classList.contains('dark');
+                
+                const maxBalance = Math.max(...chartData.map(d => d.balance), 10000);
+                const minBalance = Math.min(...chartData.map(d => d.balance), 0);
+                
+                const yRange = (maxBalance - minBalance) * 1.2 || 1; 
+                const yMinAdjusted = minBalance - (maxBalance - minBalance) * 0.1;
+
+                const getX = (index) => paddingX + (index / (chartData.length - 1)) * (width - paddingX * 2);
+                const getY = (val) => height - paddingY - ((val - yMinAdjusted) / yRange) * (height - paddingY * 2);
+
+                const zeroY = getY(0);
+                const points = chartData.map((d, i) => `${getX(i)},${getY(d.balance)}`).join(' ');
+                const polygonPoints = `${getX(0)},${height - paddingY} ${points} ${getX(chartData.length - 1)},${height - paddingY}`;
+
+                // Цветовая схема
+                const gridLineColor = isDark ? '#1e293b' : '#f1f5f9';
+                const gapBgColor = isDark ? '#4c0519' : '#fff1f2'; // rose-950 / rose-50
+                const gapLineColor = isDark ? '#f43f5e' : '#e11d48';
+                const mainLineColor = isDark ? '#6366f1' : '#4f46e5'; // indigo
+                const pointBgColor = isDark ? '#1e293b' : '#ffffff';
+                const textColor = isDark ? '#64748b' : '#94a3b8';
+
+                let svg = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" class="w-full h-full font-sans relative z-0">
+                            <defs>
+                                <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="${mainLineColor}" stop-opacity="${isDark ? '0.3' : '0.15'}" />
+                                    <stop offset="100%" stop-color="${mainLineColor}" stop-opacity="0" />
+                                </linearGradient>
+                            </defs>`;
+                
+                // Горизонтальные линии сетки
+                const gridLines = 5;
+                for(let i=0; i<=gridLines; i++) {
+                    const lineY = paddingY + (i/gridLines) * (height - paddingY*2);
+                    svg += `<line x1="${paddingX}" y1="${lineY}" x2="${width - paddingX}" y2="${lineY}" stroke="${gridLineColor}" stroke-width="1" />`;
+                }
+
+                // Зоны кассового разрыва (красный фон)
+                chartData.forEach((d, i) => {
+                    if (d.balance < 0 && i < chartData.length - 1) {
+                        const x1 = getX(i);
+                        const x2 = getX(i + 1);
+                        svg += `<rect x="${x1}" y="${paddingY}" width="${x2 - x1}" height="${height - paddingY * 2}" fill="${gapBgColor}" opacity="0.5" />`;
+                    }
+                });
+
+                // Линия нуля, если она в пределах видимости
+                if (zeroY > paddingY && zeroY < height - paddingY) {
+                    svg += `<line x1="${paddingX}" y1="${zeroY}" x2="${width - paddingX}" y2="${zeroY}" stroke="${isDark ? '#334155' : '#cbd5e1'}" stroke-width="1.5" stroke-dasharray="4 4" />`;
+                }
+
+                // Заливка графика
+                svg += `<polygon points="${polygonPoints}" fill="url(#chart-gradient)" />`;
+                // Основная линия графика
+                svg += `<polyline points="${points}" fill="none" stroke="${mainLineColor}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="drop-shadow-sm" />`;
+
+                // Отрисовка точек и текста (кроме активной)
+                chartData.forEach((d, i) => {
+                    const hasIncome = d.income > 0;
+                    const hasExpense = d.expense > 0;
+                    const isImportant = hasIncome || hasExpense || d.isGap;
+                    const isHovered = state.ui.activeChartPoint === i;
+                    
+                    if (!isImportant && i % 7 !== 0 && i !== chartData.length - 1 && !isHovered) return;
+
+                    // Точки
+                    svg += `<circle cx="${getX(i)}" cy="${getY(d.balance)}" r="${isImportant ? 4 : 2}" fill="${pointBgColor}" stroke="${d.isGap ? gapLineColor : mainLineColor}" stroke-width="${isImportant ? 2 : 1.5}" class="transition-all duration-300" />`;
+                    
+                    // Текст подписи оси X (даты)
+                    if ((i % 7 === 0 || i === chartData.length - 1) && !isHovered) {
+                        svg += `<text x="${getX(i)}" y="${height - 10}" font-size="11" font-weight="500" fill="${textColor}" text-anchor="middle">${d.label}</text>`;
+                    }
+                });
+
+                // Отрисовка Активной карточки (Tooltip) поверх всего
+                if (state.ui.activeChartPoint !== null && chartData[state.ui.activeChartPoint]) {
+                    const i = state.ui.activeChartPoint;
+                    const d = chartData[i];
+                    const actX = getX(i);
+                    const actY = getY(d.balance);
+                    
+                    // Вертикальная направляющая
+                    svg += `<line x1="${actX}" y1="${paddingY}" x2="${actX}" y2="${height - paddingY}" stroke="${mainLineColor}" stroke-width="1" stroke-dasharray="4 4" opacity="0.5" />`;
+                    
+                    // Увеличенная точка с пульсацией (эмуляция тенями)
+                    svg += `<circle cx="${actX}" cy="${actY}" r="6" fill="${mainLineColor}" stroke="${pointBgColor}" stroke-width="2" />`;
+                    svg += `<circle cx="${actX}" cy="${actY}" r="12" fill="${mainLineColor}" opacity="0.2" />`;
+
+                    // Карточка
+                    const boxW = 150;
+                    const boxH = 75;
+                    let boxX = actX - boxW / 2;
+                    if (boxX < 0) boxX = 0;
+                    if (boxX + boxW > width) boxX = width - boxW;
+                    let boxY = actY - boxH - 20;
+                    if (boxY < 0) boxY = actY + 20;
+
+                    const tooltipBg = isDark ? '#1e293b' : '#ffffff';
+                    const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
+
+                    svg += `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" fill="${tooltipBg}" stroke="${tooltipBorder}" stroke-width="1" rx="12" filter="drop-shadow(0 10px 15px rgba(0,0,0,0.1))" />`;
+                    svg += `<text x="${boxX + boxW/2}" y="${boxY + 22}" font-size="11" font-weight="600" fill="${textColor}" text-anchor="middle" letter-spacing="0.5">${d.label}</text>`;
+                    svg += `<text x="${boxX + boxW/2}" y="${boxY + 44}" font-size="16" font-weight="800" fill="${isDark ? '#f8fafc' : '#0f172a'}" text-anchor="middle">${utils.formatMoney(d.balance)}</text>`;
+                    
+                    if (d.income > 0 || d.expense > 0) {
+                        let subText = '';
+                        if (d.income > 0) subText += `+${utils.formatMoney(d.income)} `;
+                        if (d.expense > 0) subText += `-${utils.formatMoney(d.expense)}`;
+                        svg += `<text x="${boxX + boxW/2}" y="${boxY + 62}" font-size="11" font-weight="500" fill="${isDark ? '#94a3b8' : '#64748b'}" text-anchor="middle">${subText}</text>`;
+                    }
+                }
+
+                // Интерактивные прозрачные хитбоксы для клика/ховера (поверх всех слоев)
+                svg += `<g id="hitboxes">`;
+                chartData.forEach((d, i) => {
+                    const x1 = i === 0 ? 0 : getX(i) - (getX(i) - getX(i-1))/2;
+                    const x2 = i === chartData.length - 1 ? width : getX(i) + (getX(i+1) - getX(i))/2;
+                    svg += `<rect x="${x1}" y="0" width="${x2-x1}" height="${height}" fill="transparent" cursor="crosshair" onmousemove="app.setActiveChartPoint(${i})" onmouseleave="app.setActiveChartPoint(null)" />`;
+                });
+                svg += `</g>`;
+
+                svg += `</svg>`;
+                container.innerHTML = svg;
+            },
+
+            renderTableAndFilters() {
+                // Обновление счетчика
+                document.getElementById('tx-count').textContent = state.transactions.length;
+
+                // Render Type Filters
+                const baseClass = "flex-1 md:flex-none px-4 py-1.5 text-sm rounded-lg transition-all font-semibold z-10 relative ";
+                
+                const getBtnClass = (type) => {
+                    if (state.filters.type === type) {
+                        return baseClass + "bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white";
+                    }
+                    return baseClass + "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300";
+                };
+
+                document.getElementById('type-filters').innerHTML = `
+                    <button onclick="app.setFilter('type', 'all')" class="${getBtnClass('all')}">Все</button>
+                    <button onclick="app.setFilter('type', 'income')" class="${getBtnClass('income')} text-emerald-600 dark:text-emerald-500">Доходы</button>
+                    <button onclick="app.setFilter('type', 'expense')" class="${getBtnClass('expense')} text-rose-600 dark:text-rose-500">Расходы</button>
+                `;
+
+                // Categories dropdown options
+                const uniqueCategories = [...new Set(state.transactions.map(t => t.category))].filter(Boolean);
+                let catOptions = `<option value="">Все категории</option>`;
+                uniqueCategories.forEach(cat => {
+                    catOptions += `<option value="${cat}" ${state.filters.category === cat ? 'selected' : ''}>${cat}</option>`;
+                });
+                document.getElementById('filter-category').innerHTML = catOptions;
+
+                // Reset button
+                const resetContainer = document.getElementById('reset-filter-container');
+                if (state.filters.category || state.filters.dateFrom || state.filters.dateTo || state.filters.type !== 'all') {
+                    resetContainer.innerHTML = `<button onclick="app.resetFilters()" class="px-4 py-2 w-full h-[38px] text-sm font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-all flex items-center justify-center gap-2 shadow-sm"><i data-lucide="filter-x" class="w-4 h-4"></i> Сброс</button>`;
+                } else {
+                    resetContainer.innerHTML = '';
+                }
+
+                // Filter transactions
+                const filtered = state.transactions
+                    .filter(t => state.filters.type === 'all' ? true : t.type === state.filters.type)
+                    .filter(t => state.filters.category === '' ? true : t.category === state.filters.category)
+                    .filter(t => state.filters.dateFrom === '' ? true : t.date >= state.filters.dateFrom)
+                    .filter(t => state.filters.dateTo === '' ? true : t.date <= state.filters.dateTo)
+                    .sort((a, b) => new Date(a.date) - new Date(b.date)); // От старых к новым (логично для прогноза)
+
+                // Render Table Body
+                const tbody = document.getElementById('table-body');
+                if (filtered.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="py-16 text-center">
+                                <div class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 animate-fade-in">
+                                    <div class="w-16 h-16 bg-slate-50 dark:bg-slate-800/50 rounded-full flex items-center justify-center mb-3">
+                                        <i data-lucide="receipt" class="w-8 h-8 text-slate-300 dark:text-slate-600"></i>
+                                    </div>
+                                    <p class="font-semibold text-slate-600 dark:text-slate-300">Ничего не найдено</p>
+                                    <p class="text-sm mt-1 max-w-xs">Измените параметры фильтрации или добавьте новую операцию.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    tbody.innerHTML = filtered.map(tx => {
+                        const isIncome = tx.type === 'income';
+                        const isDone = tx.status === 'done';
+                        
+                        return `
+                        <tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors duration-200">
+                            <td class="py-4 px-6 text-sm whitespace-nowrap text-slate-500 dark:text-slate-400 font-medium">
+                                ${utils.formatDate(tx.date)}
+                            </td>
+                            <td class="py-4 px-6">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 rounded-xl ${isIncome ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400'}">
+                                        <i data-lucide="${isIncome ? 'arrow-down-left' : 'arrow-up-right'}" class="w-4 h-4"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-bold text-slate-900 dark:text-white leading-tight">${tx.category}</p>
+                                        ${tx.comment ? `<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[200px]">${tx.comment}</p>` : ''}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-4 px-6 font-bold text-right whitespace-nowrap ${isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}">
+                                ${isIncome ? '+' : '-'}${utils.formatMoney(tx.amount)}
+                            </td>
+                            <td class="py-4 px-6">
+                                ${isDone 
+                                    ? `<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 text-xs font-semibold border border-slate-200/60 dark:border-slate-700/60"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Исполнено</span>` 
+                                    : `<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold border border-blue-100 dark:border-blue-800/50"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span> В плане</span>`
+                                }
+                            </td>
+                            <td class="py-4 px-6 text-center">
+                                <div class="flex items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all transform md:translate-x-2 md:group-hover:translate-x-0">
+                                    ${!isDone ? `
+                                        <button onclick="app.markAsDone('${tx.id}')" title="Отметить исполненным" class="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-lg transition-colors"><i data-lucide="check" class="w-4 h-4"></i></button>
+                                    ` : `
+                                        <button onclick="app.markAsPlanned('${tx.id}')" title="Вернуть в план" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 rounded-lg transition-colors"><i data-lucide="rotate-ccw" class="w-4 h-4"></i></button>
+                                    `}
+                                    <button onclick="app.openModalForEdit('${tx.id}')" title="Редактировать" class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                                    <button onclick="app.deleteTransaction('${tx.id}')" title="Удалить" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `}).join('');
+                }
+            },
+
+            // --- ОБРАБОТЧИКИ СОБЫТИЙ ---
+
+            editBalance() {
+                state.ui.isEditingBalance = true;
+                state.ui.tempBalance = state.currentBalance;
+                this.renderBalance();
+            },
+            saveBalance() {
+                const input = document.getElementById('temp-balance-input');
+                state.currentBalance = Number(input.value) || 0;
+                state.ui.isEditingBalance = false;
+                this.saveState();
+                this.renderAll();
+                this.showToast('Баланс обновлен', `Новый баланс: ${utils.formatMoney(state.currentBalance)}`, 'success');
+            },
+            cancelEditBalance() {
+                state.ui.isEditingBalance = false;
+                this.renderBalance();
+            },
+
+            setForecastDays(days) {
+                state.forecastDays = Number(days);
+                state.ui.activeChartPoint = null; 
+                this.renderAll();
+            },
+
+            setFilter(key, value) {
+                state.filters[key] = value;
+                this.renderTableAndFilters();
+                lucide.createIcons();
+            },
+            resetFilters() {
+                state.filters = { type: 'all', category: '', dateFrom: '', dateTo: '' };
+                document.getElementById('filter-category').value = '';
+                document.getElementById('filter-date-from').value = '';
+                document.getElementById('filter-date-to').value = '';
+                this.renderTableAndFilters();
+                lucide.createIcons();
+            },
+
+            markAsDone(id) {
+                const tx = state.transactions.find(t => t.id === id);
+                if (tx) {
+                    tx.status = 'done';
+                    state.currentBalance += (tx.type === 'income' ? 1 : -1) * Number(tx.amount);
+                    this.saveState();
+                    this.renderAll();
+                    this.showToast('Операция исполнена', tx.category, 'success');
+                }
+            },
+            markAsPlanned(id) {
+                const tx = state.transactions.find(t => t.id === id);
+                if (tx) {
+                    tx.status = 'planned';
+                    state.currentBalance -= (tx.type === 'income' ? 1 : -1) * Number(tx.amount);
+                    this.saveState();
+                    this.renderAll();
+                    this.showToast('Вернуто в план', tx.category, 'info');
+                }
+            },
+            deleteTransaction(id) {
+                const txIndex = state.transactions.findIndex(t => t.id === id);
+                if (txIndex > -1) {
+                    const tx = state.transactions[txIndex];
+                    if (tx.status === 'done') {
+                        state.currentBalance -= (tx.type === 'income' ? 1 : -1) * Number(tx.amount);
+                    }
+                    state.transactions.splice(txIndex, 1);
+                    this.saveState();
+                    this.renderAll();
+                    this.showToast('Операция удалена', '', 'error');
+                }
+            },
+
+            // --- МОДАЛЬНОЕ ОКНО ---
+
+            openModalForAdd() {
+                document.getElementById('modal-title').textContent = 'Новая операция';
+                document.getElementById('modal-tx-id').value = '';
+                document.getElementById('modal-date').value = utils.getDateOffset(0);
+                document.getElementById('modal-amount').value = '';
+                document.getElementById('modal-category').value = '';
+                document.getElementById('modal-comment').value = '';
+                document.getElementById('modal-submit-btn').textContent = 'Добавить операцию';
+                
+                this.setModalType('income');
+                
+                const overlay = document.getElementById('modal-overlay');
+                const content = document.getElementById('modal-content');
+                overlay.classList.remove('hidden');
+                
+                // Trigger reflow for animation
+                void overlay.offsetWidth;
+                
+                overlay.classList.remove('opacity-0');
+                content.classList.remove('opacity-0', 'scale-95');
+                content.classList.add('opacity-100', 'scale-100');
+            },
+
+            openModalForEdit(id) {
+                const tx = state.transactions.find(t => t.id === id);
+                if (!tx) return;
+
+                document.getElementById('modal-title').textContent = 'Редактирование';
+                document.getElementById('modal-tx-id').value = tx.id;
+                document.getElementById('modal-date').value = tx.date;
+                document.getElementById('modal-amount').value = tx.amount;
+                document.getElementById('modal-category').value = tx.category;
+                document.getElementById('modal-comment').value = tx.comment || '';
+                document.getElementById('modal-submit-btn').textContent = 'Сохранить изменения';
+                
+                this.setModalType(tx.type);
+                
+                const overlay = document.getElementById('modal-overlay');
+                const content = document.getElementById('modal-content');
+                overlay.classList.remove('hidden');
+                
+                void overlay.offsetWidth;
+                
+                overlay.classList.remove('opacity-0');
+                content.classList.remove('opacity-0', 'scale-95');
+                content.classList.add('opacity-100', 'scale-100');
+            },
+
+            closeModal() {
+                const overlay = document.getElementById('modal-overlay');
+                const content = document.getElementById('modal-content');
+                
+                overlay.classList.add('opacity-0');
+                content.classList.remove('opacity-100', 'scale-100');
+                content.classList.add('opacity-0', 'scale-95');
+                
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 300); // Wait for transition
+            },
+
+            setModalType(type) {
+                state.ui.modalType = type;
+                
+                const btnIncome = document.getElementById('btn-type-income');
+                const btnExpense = document.getElementById('btn-type-expense');
+                const slider = document.getElementById('modal-type-slider');
+                const suggestionsContainer = document.getElementById('category-suggestions');
+
+                const userCats = [...new Set(state.transactions.filter(t => t.type === type).map(t => t.category))];
+
+                if (type === 'income') {
+                    btnIncome.classList.replace('text-slate-500', 'text-emerald-600');
+                    btnIncome.classList.replace('dark:text-slate-400', 'dark:text-emerald-400');
+                    btnExpense.classList.replace('text-rose-600', 'text-slate-500');
+                    btnExpense.classList.replace('dark:text-rose-400', 'dark:text-slate-400');
+                    slider.style.transform = 'translateX(0)';
+                    
+                    const allCats = [...new Set([...INCOME_CATEGORIES, ...userCats])].slice(0, 8);
+                    suggestionsContainer.innerHTML = allCats.map(c => `<button type="button" onclick="document.getElementById('modal-category').value = '${c}'" class="px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-emerald-500 hover:text-emerald-600 text-xs font-semibold rounded-lg transition-all border border-slate-200 dark:border-slate-700 shadow-sm whitespace-nowrap">${c}</button>`).join('');
+                } else {
+                    btnExpense.classList.replace('text-slate-500', 'text-rose-600');
+                    btnExpense.classList.replace('dark:text-slate-400', 'dark:text-rose-400');
+                    btnIncome.classList.replace('text-emerald-600', 'text-slate-500');
+                    btnIncome.classList.replace('dark:text-emerald-400', 'dark:text-slate-400');
+                    slider.style.transform = 'translateX(100%)';
+                    
+                    const allCats = [...new Set([...EXPENSE_CATEGORIES, ...userCats])].slice(0, 8);
+                    suggestionsContainer.innerHTML = allCats.map(c => `<button type="button" onclick="document.getElementById('modal-category').value = '${c}'" class="px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-rose-500 hover:text-rose-600 text-xs font-semibold rounded-lg transition-all border border-slate-200 dark:border-slate-700 shadow-sm whitespace-nowrap">${c}</button>`).join('');
+                }
+            },
+
+            handleSubmit(e) {
+                e.preventDefault();
+                
+                const id = document.getElementById('modal-tx-id').value;
+                const type = state.ui.modalType;
+                const date = document.getElementById('modal-date').value;
+                const amount = Number(document.getElementById('modal-amount').value);
+                const category = document.getElementById('modal-category').value.trim();
+                const comment = document.getElementById('modal-comment').value.trim();
+
+                if (!amount || !category) return;
+
+                if (id) {
+                    const tx = state.transactions.find(t => t.id === id);
+                    if (tx) {
+                        if (tx.status === 'done') {
+                            const oldVal = (tx.type === 'income' ? 1 : -1) * Number(tx.amount);
+                            const newVal = (type === 'income' ? 1 : -1) * amount;
+                            state.currentBalance += (newVal - oldVal);
+                        }
+                        tx.type = type;
+                        tx.date = date;
+                        tx.amount = amount;
+                        tx.category = category;
+                        tx.comment = comment;
+                    }
+                    this.showToast('Операция обновлена', category, 'success');
+                } else {
+                    state.transactions.push({
+                        id: Date.now().toString(),
+                        type,
+                        date,
+                        amount,
+                        category,
+                        comment,
+                        status: 'planned'
+                    });
+                    this.showToast('Операция добавлена', `${category} на ${utils.formatMoney(amount)}`, 'success');
+                }
+
+                this.saveState();
+                this.renderAll();
+                this.closeModal();
             }
-            html += '</div>';
-            els.transactionsList.innerHTML = html;
-        }
-
-        function renderFilters() {
-            const uniqueCats = [...new Set(state.transactions.map(t => t.category))].filter(Boolean).sort();
-            els.filterCategory.innerHTML = `<option value="all">Все категории</option>` + 
-                uniqueCats.map(c => `<option value="${c}" ${state.filters.category === c ? 'selected' : ''}>${c}</option>`).join('');
-            
-            els.filterType.value = state.filters.type;
-            els.filterStatus.value = state.filters.status;
-        }
-
-
-        // --- ОБРАБОТЧИКИ СОБЫТИЙ И ACTIONS ---
-        
-        window.toggleStatus = function(id) {
-            state.transactions = state.transactions.map(t => t.id === id ? { ...t, status: t.status === 'planned' ? 'completed' : 'planned' } : t);
-            renderApp();
         };
 
-        window.deleteTransaction = function(id) {
-            if (confirm('Удалить эту операцию?')) {
-                state.transactions = state.transactions.filter(t => t.id !== id);
-                renderApp();
-            }
-        };
-
-        window.editTransaction = function(id) {
-            const tx = state.transactions.find(t => t.id === id);
-            if(tx) {
-                state.form = { ...tx };
-                renderForm();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            }
-        };
-
-        // Слушатели формы
-        els.typeBtns.forEach(btn => btn.addEventListener('click', (e) => {
-            state.form.type = e.target.dataset.type;
-            renderForm();
-        }));
-
-        els.txDate.addEventListener('change', (e) => {
-            state.form.date = e.target.value;
-            state.form.status = e.target.value > getTodayString() ? 'planned' : 'completed';
-            renderForm();
+        // Close modal on click outside
+        document.getElementById('modal-overlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) app.closeModal();
         });
 
-        // Синхронизация полей формы со state при вводе
-        ['amount', 'category', 'status', 'comment'].forEach(key => {
-            els[`tx${key.charAt(0).toUpperCase() + key.slice(1)}`].addEventListener('input', (e) => {
-                state.form[key] = e.target.value;
-            });
+        window.addEventListener('DOMContentLoaded', () => {
+            app.init();
         });
-
-        els.form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            if (!state.form.amount || !state.form.date || !state.form.category) return;
-
-            const newTx = {
-                ...state.form,
-                id: state.form.id || Date.now().toString(),
-                amount: Number(state.form.amount)
-            };
-
-            if (state.form.id) {
-                state.transactions = state.transactions.map(t => t.id === state.form.id ? newTx : t);
-            } else {
-                state.transactions.push(newTx);
-            }
-
-            // Сброс формы
-            state.form = { id: null, type: state.form.type, amount: '', date: getTodayString(), category: '', status: 'completed', comment: '' };
-            renderApp();
-        });
-
-        els.cancelEditBtn.addEventListener('click', () => {
-            state.form = { id: null, type: 'income', amount: '', date: getTodayString(), category: '', status: 'completed', comment: '' };
-            renderForm();
-        });
-
-        // Слушатели глобальных настроек
-        els.currentBalanceInput.addEventListener('input', (e) => {
-            state.currentBalance = Number(e.target.value) || 0;
-            renderApp();
-        });
-        
-        els.forecastDaysInput.addEventListener('change', (e) => {
-            state.forecastDays = Number(e.target.value) || 30;
-            renderApp();
-        });
-
-        // Слушатели фильтров
-        ['Type', 'Status', 'Category'].forEach(filter => {
-            els[`filter${filter}`].addEventListener('change', (e) => {
-                state.filters[filter.toLowerCase()] = e.target.value;
-                renderApp();
-            });
-        });
-
-        // ИНИЦИАЛИЗАЦИЯ
-        renderApp();
-
     </script>
 </body>
 </html>
