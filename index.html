@@ -1,0 +1,690 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  TrendingUp, 
+  TrendingDown, 
+  AlertCircle, 
+  Plus, 
+  CheckCircle2, 
+  Trash2, 
+  Wallet,
+  Calendar,
+  Filter,
+  Edit2,
+  Save,
+  X,
+  PieChart,
+  Undo2
+} from 'lucide-react';
+
+// --- УТИЛИТЫ ---
+const formatMoney = (amount) => {
+  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(amount);
+};
+
+const formatDate = (dateString) => {
+  const options = { day: 'numeric', month: 'short' };
+  return new Date(dateString).toLocaleDateString('ru-RU', options);
+};
+
+const getDateOffset = (days) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+};
+
+export default function App() {
+  // --- STATE (С СОХРАНЕНИЕМ В LOCAL STORAGE) ---
+  const [currentBalance, setCurrentBalance] = useState(() => {
+    const saved = localStorage.getItem('finDash_balance');
+    return saved ? Number(saved) : 0;
+  }); 
+  const [isEditingBalance, setIsEditingBalance] = useState(false);
+  const [tempBalance, setTempBalance] = useState(currentBalance);
+  
+  const [forecastDays, setForecastDays] = useState(30);
+  
+  const [transactions, setTransactions] = useState(() => {
+    const saved = localStorage.getItem('finDash_transactions');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Фильтры
+  const [filterType, setFilterType] = useState('all'); 
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  
+  // Модальное окно и форма
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingTxId, setEditingTxId] = useState(null);
+  const [newTx, setNewTx] = useState({
+    type: 'income',
+    date: getDateOffset(0),
+    amount: '',
+    category: '',
+    comment: ''
+  });
+
+  // --- ЭФФЕКТЫ ДЛЯ СОХРАНЕНИЯ ДАННЫХ ---
+  useEffect(() => {
+    localStorage.setItem('finDash_balance', currentBalance.toString());
+  }, [currentBalance]);
+
+  useEffect(() => {
+    localStorage.setItem('finDash_transactions', JSON.stringify(transactions));
+  }, [transactions]);
+
+
+  // Уникальные категории для фильтра (существующие)
+  const uniqueCategories = useMemo(() => {
+    return [...new Set(transactions.map(t => t.category))].filter(Boolean);
+  }, [transactions]);
+
+  // Подсказки категорий при создании
+  const incomeCategories = ["Ozon", "Wildberries", "Яндекс.Маркет", "Мегамаркет", "Свой сайт"];
+  const expenseCategories = ["Закупка товара", "Реклама", "Логистика", "Налоги", "Кредит / займ", "Упаковка", "Зарплата", "Комиссии МП"];
+
+  // --- LOGIC: ПРОГНОЗ И РАСЧЕТЫ ---
+  const forecastData = useMemo(() => {
+    const data = [];
+    let runningBalance = Number(currentBalance);
+    let firstGap = null;
+
+    for (let i = 0; i <= forecastDays; i++) {
+      const targetDate = getDateOffset(i);
+      const dayTxs = transactions.filter(t => t.date === targetDate && t.status === 'planned');
+      
+      const dayIncome = dayTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
+      const dayExpense = dayTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
+      
+      runningBalance += dayIncome;
+      runningBalance -= dayExpense;
+
+      if (runningBalance < 0 && !firstGap) {
+        firstGap = { date: targetDate, deficit: Math.abs(runningBalance) };
+      }
+
+      data.push({
+        dayIndex: i,
+        date: targetDate,
+        label: formatDate(targetDate),
+        balance: runningBalance,
+        income: dayIncome,
+        expense: dayExpense,
+        isGap: runningBalance < 0
+      });
+    }
+
+    return { chartData: data, firstGap, finalBalance: runningBalance };
+  }, [currentBalance, transactions, forecastDays]);
+
+  // --- HANDLERS ---
+  const handleSaveBalance = () => {
+    setCurrentBalance(Number(tempBalance));
+    setIsEditingBalance(false);
+  };
+
+  const openModalForAdd = () => {
+    setEditingTxId(null);
+    setNewTx({ type: 'income', date: getDateOffset(0), amount: '', category: '', comment: '' });
+    setShowAddModal(true);
+  };
+
+  const openModalForEdit = (tx) => {
+    setEditingTxId(tx.id);
+    setNewTx({ 
+      type: tx.type, 
+      date: tx.date, 
+      amount: tx.amount, 
+      category: tx.category, 
+      comment: tx.comment || '' 
+    });
+    setShowAddModal(true);
+  };
+
+  const handleSubmitTransaction = (e) => {
+    e.preventDefault();
+    if (!newTx.amount || !newTx.category) return;
+
+    if (editingTxId) {
+      // Ищем старую транзакцию
+      const oldTx = transactions.find(t => t.id === editingTxId);
+      
+      // Если транзакция уже была выполнена, нужно скорректировать фактический баланс
+      if (oldTx && oldTx.status === 'done') {
+        const oldVal = (oldTx.type === 'income' ? 1 : -1) * Number(oldTx.amount);
+        const newVal = (newTx.type === 'income' ? 1 : -1) * Number(newTx.amount);
+        setCurrentBalance(prev => prev + (newVal - oldVal));
+      }
+
+      // Обновляем запись
+      setTransactions(prev => prev.map(t => t.id === editingTxId ? {
+        ...t,
+        date: newTx.date,
+        type: newTx.type,
+        amount: Number(newTx.amount),
+        category: newTx.category,
+        comment: newTx.comment
+      } : t));
+    } else {
+      // Создание новой записи
+      const transaction = {
+        id: Date.now().toString(),
+        date: newTx.date,
+        type: newTx.type,
+        amount: Number(newTx.amount),
+        category: newTx.category,
+        status: 'planned',
+        comment: newTx.comment
+      };
+      setTransactions([...transactions, transaction]);
+    }
+    
+    setShowAddModal(false);
+  };
+
+  const markAsDone = (id) => {
+    const tx = transactions.find(t => t.id === id);
+    if (!tx || tx.status === 'done') return;
+
+    const amount = Number(tx.amount);
+    setCurrentBalance(prev => prev + (tx.type === 'income' ? amount : -amount));
+    setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'done' } : t));
+  };
+
+  const markAsPlanned = (id) => {
+    const tx = transactions.find(t => t.id === id);
+    if (!tx || tx.status === 'planned') return;
+
+    // Откатываем эффект от выполненной операции
+    const amount = Number(tx.amount);
+    setCurrentBalance(prev => prev - (tx.type === 'income' ? amount : -amount));
+    setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'planned' } : t));
+  };
+
+  const deleteTransaction = (id) => {
+    const tx = transactions.find(t => t.id === id);
+    if (tx && tx.status === 'done') {
+      // Если удаляем выполненную операцию, возвращаем деньги на место
+      const val = (tx.type === 'income' ? 1 : -1) * Number(tx.amount);
+      setCurrentBalance(prev => prev - val);
+    }
+    setTransactions(prev => prev.filter(t => t.id !== id));
+  };
+
+  const resetFilters = () => {
+    setFilterType('all');
+    setFilterCategory('');
+    setFilterDateFrom('');
+    setFilterDateTo('');
+  };
+
+  // --- CHART RENDERING ---
+  const renderChart = () => {
+    const { chartData } = forecastData;
+    if (chartData.length === 0) return null;
+
+    const width = 800;
+    const height = 300;
+    const paddingX = 40;
+    const paddingY = 40;
+    
+    const maxBalance = Math.max(...chartData.map(d => d.balance), 10000);
+    const minBalance = Math.min(...chartData.map(d => d.balance), 0);
+    
+    const yRange = (maxBalance - minBalance) * 1.2 || 1; 
+    const yMinAdjusted = minBalance - (maxBalance - minBalance) * 0.1;
+
+    const getX = (index) => paddingX + (index / (chartData.length - 1)) * (width - paddingX * 2);
+    const getY = (val) => height - paddingY - ((val - yMinAdjusted) / yRange) * (height - paddingY * 2);
+
+    const zeroY = getY(0);
+    const points = chartData.map((d, i) => `${getX(i)},${getY(d.balance)}`).join(' ');
+
+    return (
+      <div className="w-full overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto min-w-[600px] font-sans">
+          <line x1={paddingX} y1={zeroY} x2={width - paddingX} y2={zeroY} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 4" />
+          
+          {chartData.map((d, i) => {
+            if (d.balance < 0 && i < chartData.length - 1) {
+              const x1 = getX(i);
+              const x2 = getX(i + 1);
+              return <rect key={`gap-${i}`} x={x1} y={zeroY} width={x2 - x1} height={height - paddingY - zeroY} fill="#fef2f2" />;
+            }
+            return null;
+          })}
+
+          <polyline points={points} fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          
+          {chartData.map((d, i) => {
+            const hasIncome = d.income > 0;
+            const hasExpense = d.expense > 0;
+            const isImportant = hasIncome || hasExpense || d.isGap;
+            
+            if (!isImportant && i % 5 !== 0 && i !== chartData.length - 1) return null;
+
+            return (
+              <g key={`point-${i}`}>
+                <circle 
+                  cx={getX(i)} cy={getY(d.balance)} 
+                  r={isImportant ? 4 : 2} 
+                  fill={d.isGap ? '#ef4444' : '#ffffff'} 
+                  stroke={d.isGap ? '#ef4444' : '#3b82f6'} 
+                  strokeWidth="2" 
+                />
+                {(i % 5 === 0 || i === chartData.length - 1 || d.isGap) && (
+                  <text x={getX(i)} y={height - 10} fontSize="10" fill="#64748b" textAnchor="middle">{d.label}</text>
+                )}
+                {hasIncome && (
+                  <text x={getX(i)} y={getY(d.balance) - 15} fontSize="10" fill="#10b981" textAnchor="middle" fontWeight="bold">+{d.income / 1000}k</text>
+                )}
+                {hasExpense && (
+                  <text x={getX(i)} y={getY(d.balance) + 20} fontSize="10" fill="#ef4444" textAnchor="middle" fontWeight="bold">-{d.expense / 1000}k</text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    );
+  };
+
+  // Фильтрация транзакций
+  const filteredTransactions = transactions
+    .filter(t => filterType === 'all' ? true : t.type === filterType)
+    .filter(t => filterCategory === '' ? true : t.category === filterCategory)
+    .filter(t => filterDateFrom === '' ? true : t.date >= filterDateFrom)
+    .filter(t => filterDateTo === '' ? true : t.date <= filterDateTo)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // Подсчет статистики
+  const plannedIncome = transactions.filter(t => t.type === 'income' && t.status === 'planned').reduce((s, t) => s + Number(t.amount), 0);
+  const plannedExpense = transactions.filter(t => t.type === 'expense' && t.status === 'planned').reduce((s, t) => s + Number(t.amount), 0);
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Финансовый дашборд</h1>
+            <p className="text-slate-500 text-sm">Прогноз Cash Flow и учет для селлера</p>
+          </div>
+          <button 
+            onClick={openModalForAdd}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm"
+          >
+            <Plus size={18} />
+            Добавить операцию
+          </button>
+        </div>
+
+        {/* ALERTS */}
+        {forecastData.firstGap && (
+          <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl flex items-start gap-3 shadow-sm animate-pulse">
+            <AlertCircle className="text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-red-900">Внимание: Кассовый разрыв!</h3>
+              <p className="text-sm mt-1">
+                Ожидается дефицит средств <strong>{formatDate(forecastData.firstGap.date)}</strong>. 
+                Не хватает: <span className="font-bold">{formatMoney(forecastData.firstGap.deficit)}</span>
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* TOP STATS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 1. Текущий баланс */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start gap-4 transition-all hover:shadow-md">
+            <div className="p-3 bg-blue-100 text-blue-600 rounded-lg">
+              <Wallet size={24} />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm text-slate-500 font-medium mb-1">Фактический баланс</p>
+              {isEditingBalance ? (
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="number" 
+                    value={tempBalance} 
+                    onChange={e => setTempBalance(e.target.value)}
+                    className="w-full border-b border-blue-500 focus:outline-none text-xl font-bold py-1 bg-transparent"
+                    autoFocus
+                  />
+                  <button onClick={handleSaveBalance} className="text-emerald-600 p-1 hover:bg-emerald-50 rounded"><Save size={18}/></button>
+                  <button onClick={() => setIsEditingBalance(false)} className="text-slate-400 p-1 hover:bg-slate-100 rounded"><X size={18}/></button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group cursor-pointer" onClick={() => { setIsEditingBalance(true); setTempBalance(currentBalance); }}>
+                  <h2 className="text-2xl font-bold text-slate-900">{formatMoney(currentBalance)}</h2>
+                  <Edit2 size={16} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* 2. Доходы в плане */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+            <div className="p-3 bg-emerald-100 text-emerald-600 rounded-lg">
+              <TrendingUp size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-slate-500 font-medium">Плановые доходы</p>
+              <h2 className="text-2xl font-bold text-slate-900">{formatMoney(plannedIncome)}</h2>
+            </div>
+          </div>
+
+          {/* 3. Расходы в плане */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+            <div className="p-3 bg-rose-100 text-rose-600 rounded-lg">
+              <TrendingDown size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-slate-500 font-medium">Плановые расходы</p>
+              <h2 className="text-2xl font-bold text-slate-900">{formatMoney(plannedExpense)}</h2>
+            </div>
+          </div>
+
+          {/* 4. Ожидаемый баланс */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
+            <div className={`p-3 rounded-lg ${forecastData.finalBalance >= 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-red-100 text-red-600'}`}>
+              <PieChart size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-slate-500 font-medium">Ожидаемый баланс (+{forecastDays}д)</p>
+              <h2 className={`text-2xl font-bold ${forecastData.finalBalance >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
+                {formatMoney(forecastData.finalBalance)}
+              </h2>
+            </div>
+          </div>
+        </div>
+
+        {/* CHART SECTION */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <TrendingUp size={20} className="text-slate-400"/> График движения средств
+            </h2>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-500">Прогноз на:</span>
+              <select 
+                value={forecastDays} 
+                onChange={e => setForecastDays(Number(e.target.value))}
+                className="bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
+              >
+                <option value={14}>14 дней</option>
+                <option value={30}>30 дней</option>
+                <option value={60}>60 дней</option>
+                <option value={90}>90 дней</option>
+              </select>
+            </div>
+          </div>
+          {renderChart()}
+        </div>
+
+        {/* TRANSACTIONS TABLE & FILTERS */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 space-y-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Calendar size={20} className="text-slate-400"/> Операции
+              </h2>
+              
+              {/* Переключатель типа (Все / Доходы / Расходы) */}
+              <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto">
+                <button onClick={() => setFilterType('all')} className={`flex-1 md:flex-none px-4 py-1.5 text-sm rounded-md transition-colors ${filterType === 'all' ? 'bg-white shadow-sm font-medium' : 'text-slate-500 hover:text-slate-800'}`}>Все</button>
+                <button onClick={() => setFilterType('income')} className={`flex-1 md:flex-none px-4 py-1.5 text-sm rounded-md transition-colors ${filterType === 'income' ? 'bg-white shadow-sm font-medium text-emerald-600' : 'text-slate-500 hover:text-slate-800'}`}>Доходы</button>
+                <button onClick={() => setFilterType('expense')} className={`flex-1 md:flex-none px-4 py-1.5 text-sm rounded-md transition-colors ${filterType === 'expense' ? 'bg-white shadow-sm font-medium text-rose-600' : 'text-slate-500 hover:text-slate-800'}`}>Расходы</button>
+              </div>
+            </div>
+
+            {/* Фильтры: Категория и Даты */}
+            <div className="flex flex-col md:flex-row gap-4 items-end bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <div className="flex-1 w-full">
+                <label className="block text-xs font-medium text-slate-500 mb-1">Категория</label>
+                <select 
+                  value={filterCategory} 
+                  onChange={e => setFilterCategory(e.target.value)}
+                  className="w-full bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Все категории</option>
+                  {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+              <div className="flex-1 w-full">
+                <label className="block text-xs font-medium text-slate-500 mb-1">Дата от</label>
+                <input 
+                  type="date" 
+                  value={filterDateFrom} 
+                  onChange={e => setFilterDateFrom(e.target.value)}
+                  className="w-full bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex-1 w-full">
+                <label className="block text-xs font-medium text-slate-500 mb-1">Дата до</label>
+                <input 
+                  type="date" 
+                  value={filterDateTo} 
+                  onChange={e => setFilterDateTo(e.target.value)}
+                  className="w-full bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {(filterCategory || filterDateFrom || filterDateTo || filterType !== 'all') && (
+                <button 
+                  onClick={resetFilters}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors w-full md:w-auto flex items-center justify-center gap-1"
+                >
+                  <Filter size={16} /> Сбросить
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* Таблица */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[600px]">
+              <thead>
+                <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
+                  <th className="p-4 font-medium w-32">Дата</th>
+                  <th className="p-4 font-medium">Категория / Источник</th>
+                  <th className="p-4 font-medium text-right w-40">Сумма</th>
+                  <th className="p-4 font-medium w-32">Статус</th>
+                  <th className="p-4 font-medium text-center w-32">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTransactions.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="p-12 text-center">
+                      <div className="flex flex-col items-center justify-center text-slate-400">
+                        <Calendar size={32} className="mb-2 opacity-50" />
+                        <p>Нет операций для отображения</p>
+                        <p className="text-xs mt-1">Измените фильтры или добавьте новую операцию</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {filteredTransactions.map((tx) => (
+                  <tr key={tx.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors group">
+                    <td className="p-4 text-sm whitespace-nowrap text-slate-600 font-medium">{formatDate(tx.date)}</td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${tx.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                          {tx.type === 'income' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-900">{tx.category}</p>
+                          {tx.comment && <p className="text-xs text-slate-500 mt-0.5">{tx.comment}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className={`p-4 font-bold text-right whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount)}
+                    </td>
+                    <td className="p-4">
+                      {tx.status === 'done' ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                          <CheckCircle2 size={12} /> Выполнено
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                          В плане
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 text-center">
+                      <div className="flex items-center justify-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        {tx.status === 'planned' ? (
+                          <button 
+                            onClick={() => markAsDone(tx.id)}
+                            title="Отметить как выполненное (деньги начислятся/спишутся с факт. баланса)"
+                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                          >
+                            <CheckCircle2 size={18} />
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => markAsPlanned(tx.id)}
+                            title="Отменить выполнение (вернуть в план)"
+                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                          >
+                            <Undo2 size={18} />
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => openModalForEdit(tx)}
+                          title="Редактировать"
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button 
+                          onClick={() => deleteTransaction(tx.id)}
+                          title="Удалить"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* MODAL (ADD / EDIT) */}
+        {showAddModal && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 className="text-xl font-bold text-slate-800">
+                  {editingTxId ? 'Редактировать операцию' : 'Новая операция'}
+                </h3>
+                <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-700 transition-colors p-1 hover:bg-slate-200 rounded-md">
+                  <X size={20}/>
+                </button>
+              </div>
+              
+              <form onSubmit={handleSubmitTransaction} className="p-6 space-y-5 overflow-y-auto">
+                
+                {/* Переключатель Доход/Расход */}
+                <div className="flex bg-slate-100 p-1 rounded-lg">
+                  <button 
+                    type="button" 
+                    onClick={() => setNewTx({...newTx, type: 'income', category: ''})} 
+                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${newTx.type === 'income' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Поступление
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setNewTx({...newTx, type: 'expense', category: ''})} 
+                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${newTx.type === 'expense' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Расход
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Дата операции</label>
+                  <input 
+                    type="date" 
+                    required 
+                    value={newTx.date} 
+                    onChange={e => setNewTx({...newTx, date: e.target.value})} 
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Сумма (₽)</label>
+                  <input 
+                    type="number" 
+                    required 
+                    min="1" 
+                    value={newTx.amount} 
+                    onChange={e => setNewTx({...newTx, amount: e.target.value})} 
+                    placeholder="Например: 50000" 
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Категория / Источник</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={newTx.category} 
+                    onChange={e => setNewTx({...newTx, category: e.target.value})} 
+                    placeholder={newTx.type === 'income' ? "Ozon, Wildberries..." : "Закупка, Реклама..."} 
+                    list={newTx.type === 'income' ? "income-categories" : "expense-categories"} 
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                  {/* Разделенные дата-листы для доходов и расходов */}
+                  <datalist id="income-categories">
+                    {incomeCategories.map(cat => <option key={cat} value={cat} />)}
+                  </datalist>
+                  <datalist id="expense-categories">
+                    {expenseCategories.map(cat => <option key={cat} value={cat} />)}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Комментарий <span className="text-slate-400 font-normal">(необязательно)</span></label>
+                  <input 
+                    type="text" 
+                    value={newTx.comment} 
+                    onChange={e => setNewTx({...newTx, comment: e.target.value})} 
+                    placeholder="Краткое описание" 
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                </div>
+
+                <div className="pt-4 flex gap-3 border-t border-slate-100">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowAddModal(false)} 
+                    className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors"
+                  >
+                    Отмена
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                  >
+                    {editingTxId ? 'Сохранить' : 'Добавить'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
