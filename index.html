@@ -1,690 +1,701 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  AlertCircle, 
-  Plus, 
-  CheckCircle2, 
-  Trash2, 
-  Wallet,
-  Calendar,
-  Filter,
-  Edit2,
-  Save,
-  X,
-  PieChart,
-  Undo2
-} from 'lucide-react';
-
-// --- УТИЛИТЫ ---
-const formatMoney = (amount) => {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(amount);
-};
-
-const formatDate = (dateString) => {
-  const options = { day: 'numeric', month: 'short' };
-  return new Date(dateString).toLocaleDateString('ru-RU', options);
-};
-
-const getDateOffset = (days) => {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toISOString().split('T')[0];
-};
-
-export default function App() {
-  // --- STATE (С СОХРАНЕНИЕМ В LOCAL STORAGE) ---
-  const [currentBalance, setCurrentBalance] = useState(() => {
-    const saved = localStorage.getItem('finDash_balance');
-    return saved ? Number(saved) : 0;
-  }); 
-  const [isEditingBalance, setIsEditingBalance] = useState(false);
-  const [tempBalance, setTempBalance] = useState(currentBalance);
-  
-  const [forecastDays, setForecastDays] = useState(30);
-  
-  const [transactions, setTransactions] = useState(() => {
-    const saved = localStorage.getItem('finDash_transactions');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Фильтры
-  const [filterType, setFilterType] = useState('all'); 
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
-  
-  // Модальное окно и форма
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingTxId, setEditingTxId] = useState(null);
-  const [newTx, setNewTx] = useState({
-    type: 'income',
-    date: getDateOffset(0),
-    amount: '',
-    category: '',
-    comment: ''
-  });
-
-  // --- ЭФФЕКТЫ ДЛЯ СОХРАНЕНИЯ ДАННЫХ ---
-  useEffect(() => {
-    localStorage.setItem('finDash_balance', currentBalance.toString());
-  }, [currentBalance]);
-
-  useEffect(() => {
-    localStorage.setItem('finDash_transactions', JSON.stringify(transactions));
-  }, [transactions]);
-
-
-  // Уникальные категории для фильтра (существующие)
-  const uniqueCategories = useMemo(() => {
-    return [...new Set(transactions.map(t => t.category))].filter(Boolean);
-  }, [transactions]);
-
-  // Подсказки категорий при создании
-  const incomeCategories = ["Ozon", "Wildberries", "Яндекс.Маркет", "Мегамаркет", "Свой сайт"];
-  const expenseCategories = ["Закупка товара", "Реклама", "Логистика", "Налоги", "Кредит / займ", "Упаковка", "Зарплата", "Комиссии МП"];
-
-  // --- LOGIC: ПРОГНОЗ И РАСЧЕТЫ ---
-  const forecastData = useMemo(() => {
-    const data = [];
-    let runningBalance = Number(currentBalance);
-    let firstGap = null;
-
-    for (let i = 0; i <= forecastDays; i++) {
-      const targetDate = getDateOffset(i);
-      const dayTxs = transactions.filter(t => t.date === targetDate && t.status === 'planned');
-      
-      const dayIncome = dayTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
-      const dayExpense = dayTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
-      
-      runningBalance += dayIncome;
-      runningBalance -= dayExpense;
-
-      if (runningBalance < 0 && !firstGap) {
-        firstGap = { date: targetDate, deficit: Math.abs(runningBalance) };
-      }
-
-      data.push({
-        dayIndex: i,
-        date: targetDate,
-        label: formatDate(targetDate),
-        balance: runningBalance,
-        income: dayIncome,
-        expense: dayExpense,
-        isGap: runningBalance < 0
-      });
-    }
-
-    return { chartData: data, firstGap, finalBalance: runningBalance };
-  }, [currentBalance, transactions, forecastDays]);
-
-  // --- HANDLERS ---
-  const handleSaveBalance = () => {
-    setCurrentBalance(Number(tempBalance));
-    setIsEditingBalance(false);
-  };
-
-  const openModalForAdd = () => {
-    setEditingTxId(null);
-    setNewTx({ type: 'income', date: getDateOffset(0), amount: '', category: '', comment: '' });
-    setShowAddModal(true);
-  };
-
-  const openModalForEdit = (tx) => {
-    setEditingTxId(tx.id);
-    setNewTx({ 
-      type: tx.type, 
-      date: tx.date, 
-      amount: tx.amount, 
-      category: tx.category, 
-      comment: tx.comment || '' 
-    });
-    setShowAddModal(true);
-  };
-
-  const handleSubmitTransaction = (e) => {
-    e.preventDefault();
-    if (!newTx.amount || !newTx.category) return;
-
-    if (editingTxId) {
-      // Ищем старую транзакцию
-      const oldTx = transactions.find(t => t.id === editingTxId);
-      
-      // Если транзакция уже была выполнена, нужно скорректировать фактический баланс
-      if (oldTx && oldTx.status === 'done') {
-        const oldVal = (oldTx.type === 'income' ? 1 : -1) * Number(oldTx.amount);
-        const newVal = (newTx.type === 'income' ? 1 : -1) * Number(newTx.amount);
-        setCurrentBalance(prev => prev + (newVal - oldVal));
-      }
-
-      // Обновляем запись
-      setTransactions(prev => prev.map(t => t.id === editingTxId ? {
-        ...t,
-        date: newTx.date,
-        type: newTx.type,
-        amount: Number(newTx.amount),
-        category: newTx.category,
-        comment: newTx.comment
-      } : t));
-    } else {
-      // Создание новой записи
-      const transaction = {
-        id: Date.now().toString(),
-        date: newTx.date,
-        type: newTx.type,
-        amount: Number(newTx.amount),
-        category: newTx.category,
-        status: 'planned',
-        comment: newTx.comment
-      };
-      setTransactions([...transactions, transaction]);
-    }
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Финансовый дашборд</title>
     
-    setShowAddModal(false);
-  };
-
-  const markAsDone = (id) => {
-    const tx = transactions.find(t => t.id === id);
-    if (!tx || tx.status === 'done') return;
-
-    const amount = Number(tx.amount);
-    setCurrentBalance(prev => prev + (tx.type === 'income' ? amount : -amount));
-    setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'done' } : t));
-  };
-
-  const markAsPlanned = (id) => {
-    const tx = transactions.find(t => t.id === id);
-    if (!tx || tx.status === 'planned') return;
-
-    // Откатываем эффект от выполненной операции
-    const amount = Number(tx.amount);
-    setCurrentBalance(prev => prev - (tx.type === 'income' ? amount : -amount));
-    setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'planned' } : t));
-  };
-
-  const deleteTransaction = (id) => {
-    const tx = transactions.find(t => t.id === id);
-    if (tx && tx.status === 'done') {
-      // Если удаляем выполненную операцию, возвращаем деньги на место
-      const val = (tx.type === 'income' ? 1 : -1) * Number(tx.amount);
-      setCurrentBalance(prev => prev - val);
-    }
-    setTransactions(prev => prev.filter(t => t.id !== id));
-  };
-
-  const resetFilters = () => {
-    setFilterType('all');
-    setFilterCategory('');
-    setFilterDateFrom('');
-    setFilterDateTo('');
-  };
-
-  // --- CHART RENDERING ---
-  const renderChart = () => {
-    const { chartData } = forecastData;
-    if (chartData.length === 0) return null;
-
-    const width = 800;
-    const height = 300;
-    const paddingX = 40;
-    const paddingY = 40;
+    <!-- Подключаем Tailwind CSS для красивого дизайна без сборки -->
+    <script src="https://cdn.tailwindcss.com"></script>
     
-    const maxBalance = Math.max(...chartData.map(d => d.balance), 10000);
-    const minBalance = Math.min(...chartData.map(d => d.balance), 0);
-    
-    const yRange = (maxBalance - minBalance) * 1.2 || 1; 
-    const yMinAdjusted = minBalance - (maxBalance - minBalance) * 0.1;
+    <!-- Подключаем иконки Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-    const getX = (index) => paddingX + (index / (chartData.length - 1)) * (width - paddingX * 2);
-    const getY = (val) => height - paddingY - ((val - yMinAdjusted) / yRange) * (height - paddingY * 2);
+    <style>
+        /* Небольшие кастомные стили поверх Tailwind */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .hide-scroll::-webkit-scrollbar {
+            height: 6px;
+        }
+        .hide-scroll::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 p-3 md:p-6">
 
-    const zeroY = getY(0);
-    const points = chartData.map((d, i) => `${getX(i)},${getY(d.balance)}`).join(' ');
-
-    return (
-      <div className="w-full overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto min-w-[600px] font-sans">
-          <line x1={paddingX} y1={zeroY} x2={width - paddingX} y2={zeroY} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 4" />
-          
-          {chartData.map((d, i) => {
-            if (d.balance < 0 && i < chartData.length - 1) {
-              const x1 = getX(i);
-              const x2 = getX(i + 1);
-              return <rect key={`gap-${i}`} x={x1} y={zeroY} width={x2 - x1} height={height - paddingY - zeroY} fill="#fef2f2" />;
-            }
-            return null;
-          })}
-
-          <polyline points={points} fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          
-          {chartData.map((d, i) => {
-            const hasIncome = d.income > 0;
-            const hasExpense = d.expense > 0;
-            const isImportant = hasIncome || hasExpense || d.isGap;
-            
-            if (!isImportant && i % 5 !== 0 && i !== chartData.length - 1) return null;
-
-            return (
-              <g key={`point-${i}`}>
-                <circle 
-                  cx={getX(i)} cy={getY(d.balance)} 
-                  r={isImportant ? 4 : 2} 
-                  fill={d.isGap ? '#ef4444' : '#ffffff'} 
-                  stroke={d.isGap ? '#ef4444' : '#3b82f6'} 
-                  strokeWidth="2" 
-                />
-                {(i % 5 === 0 || i === chartData.length - 1 || d.isGap) && (
-                  <text x={getX(i)} y={height - 10} fontSize="10" fill="#64748b" textAnchor="middle">{d.label}</text>
-                )}
-                {hasIncome && (
-                  <text x={getX(i)} y={getY(d.balance) - 15} fontSize="10" fill="#10b981" textAnchor="middle" fontWeight="bold">+{d.income / 1000}k</text>
-                )}
-                {hasExpense && (
-                  <text x={getX(i)} y={getY(d.balance) + 20} fontSize="10" fill="#ef4444" textAnchor="middle" fontWeight="bold">-{d.expense / 1000}k</text>
-                )}
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-    );
-  };
-
-  // Фильтрация транзакций
-  const filteredTransactions = transactions
-    .filter(t => filterType === 'all' ? true : t.type === filterType)
-    .filter(t => filterCategory === '' ? true : t.category === filterCategory)
-    .filter(t => filterDateFrom === '' ? true : t.date >= filterDateFrom)
-    .filter(t => filterDateTo === '' ? true : t.date <= filterDateTo)
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-  // Подсчет статистики
-  const plannedIncome = transactions.filter(t => t.type === 'income' && t.status === 'planned').reduce((s, t) => s + Number(t.amount), 0);
-  const plannedExpense = transactions.filter(t => t.type === 'expense' && t.status === 'planned').reduce((s, t) => s + Number(t.amount), 0);
-
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div class="max-w-[1400px] mx-auto space-y-6">
         
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Финансовый дашборд</h1>
-            <p className="text-slate-500 text-sm">Прогноз Cash Flow и учет для селлера</p>
-          </div>
-          <button 
-            onClick={openModalForAdd}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm"
-          >
-            <Plus size={18} />
-            Добавить операцию
-          </button>
-        </div>
-
-        {/* ALERTS */}
-        {forecastData.firstGap && (
-          <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl flex items-start gap-3 shadow-sm animate-pulse">
-            <AlertCircle className="text-red-500 shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-red-900">Внимание: Кассовый разрыв!</h3>
-              <p className="text-sm mt-1">
-                Ожидается дефицит средств <strong>{formatDate(forecastData.firstGap.date)}</strong>. 
-                Не хватает: <span className="font-bold">{formatMoney(forecastData.firstGap.deficit)}</span>
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* TOP STATS */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* 1. Текущий баланс */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start gap-4 transition-all hover:shadow-md">
-            <div className="p-3 bg-blue-100 text-blue-600 rounded-lg">
-              <Wallet size={24} />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm text-slate-500 font-medium mb-1">Фактический баланс</p>
-              {isEditingBalance ? (
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="number" 
-                    value={tempBalance} 
-                    onChange={e => setTempBalance(e.target.value)}
-                    className="w-full border-b border-blue-500 focus:outline-none text-xl font-bold py-1 bg-transparent"
-                    autoFocus
-                  />
-                  <button onClick={handleSaveBalance} className="text-emerald-600 p-1 hover:bg-emerald-50 rounded"><Save size={18}/></button>
-                  <button onClick={() => setIsEditingBalance(false)} className="text-slate-400 p-1 hover:bg-slate-100 rounded"><X size={18}/></button>
+        <!-- ШАПКА И НАСТРОЙКИ -->
+        <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-5 md:p-7 rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 gap-6">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                    <i data-lucide="wallet" class="w-6 h-6"></i>
                 </div>
-              ) : (
-                <div className="flex items-center gap-2 group cursor-pointer" onClick={() => { setIsEditingBalance(true); setTempBalance(currentBalance); }}>
-                  <h2 className="text-2xl font-bold text-slate-900">{formatMoney(currentBalance)}</h2>
-                  <Edit2 size={16} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">Финансовый дашборд</h1>
+                    <p class="text-sm text-slate-500 font-medium mt-0.5">Чистый JS, работает без серверов</p>
                 </div>
-              )}
             </div>
-          </div>
-          
-          {/* 2. Доходы в плане */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
-            <div className="p-3 bg-emerald-100 text-emerald-600 rounded-lg">
-              <TrendingUp size={24} />
+            
+            <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/60 flex-1 lg:min-w-[220px] transition-all focus-within:ring-2 ring-indigo-500/20 focus-within:bg-white">
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Баланс на сегодня (₽)</label>
+                    <input type="number" id="currentBalanceInput" placeholder="0" class="w-full bg-transparent font-bold text-xl md:text-2xl outline-none text-slate-800 placeholder-slate-300"/>
+                </div>
+                <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/60 flex-1 lg:min-w-[140px] transition-all focus-within:ring-2 ring-indigo-500/20 focus-within:bg-white">
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Горизонт (дней)</label>
+                    <input type="number" id="forecastDaysInput" min="7" max="365" class="w-full bg-transparent font-bold text-xl md:text-2xl outline-none text-slate-800"/>
+                </div>
             </div>
-            <div>
-              <p className="text-sm text-slate-500 font-medium">Плановые доходы</p>
-              <h2 className="text-2xl font-bold text-slate-900">{formatMoney(plannedIncome)}</h2>
-            </div>
-          </div>
+        </header>
 
-          {/* 3. Расходы в плане */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
-            <div className="p-3 bg-rose-100 text-rose-600 rounded-lg">
-              <TrendingDown size={24} />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500 font-medium">Плановые расходы</p>
-              <h2 className="text-2xl font-bold text-slate-900">{formatMoney(plannedExpense)}</h2>
-            </div>
-          </div>
-
-          {/* 4. Ожидаемый баланс */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
-            <div className={`p-3 rounded-lg ${forecastData.finalBalance >= 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-red-100 text-red-600'}`}>
-              <PieChart size={24} />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500 font-medium">Ожидаемый баланс (+{forecastDays}д)</p>
-              <h2 className={`text-2xl font-bold ${forecastData.finalBalance >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
-                {formatMoney(forecastData.finalBalance)}
-              </h2>
-            </div>
-          </div>
+        <!-- АЛЕРТЫ: ПРОСРОЧКИ И КАССОВЫЕ РАЗРЫВЫ -->
+        <div id="alertsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4 empty:hidden">
+            <!-- Сюда JS вставит алерты -->
         </div>
 
-        {/* CHART SECTION */}
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <TrendingUp size={20} className="text-slate-400"/> График движения средств
-            </h2>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-slate-500">Прогноз на:</span>
-              <select 
-                value={forecastDays} 
-                onChange={e => setForecastDays(Number(e.target.value))}
-                className="bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm cursor-pointer"
-              >
-                <option value={14}>14 дней</option>
-                <option value={30}>30 дней</option>
-                <option value={60}>60 дней</option>
-                <option value={90}>90 дней</option>
-              </select>
+        <!-- ГРАФИК -->
+        <div id="chartContainer" class="relative w-full overflow-x-auto bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 p-6 hide-scroll">
+            <div class="min-w-[700px] relative" id="chartWrapper">
+                <!-- SVG График и Тултип рендерятся тут -->
             </div>
-          </div>
-          {renderChart()}
         </div>
 
-        {/* TRANSACTIONS TABLE & FILTERS */}
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-200 space-y-4">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Calendar size={20} className="text-slate-400"/> Операции
-              </h2>
-              
-              {/* Переключатель типа (Все / Доходы / Расходы) */}
-              <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto">
-                <button onClick={() => setFilterType('all')} className={`flex-1 md:flex-none px-4 py-1.5 text-sm rounded-md transition-colors ${filterType === 'all' ? 'bg-white shadow-sm font-medium' : 'text-slate-500 hover:text-slate-800'}`}>Все</button>
-                <button onClick={() => setFilterType('income')} className={`flex-1 md:flex-none px-4 py-1.5 text-sm rounded-md transition-colors ${filterType === 'income' ? 'bg-white shadow-sm font-medium text-emerald-600' : 'text-slate-500 hover:text-slate-800'}`}>Доходы</button>
-                <button onClick={() => setFilterType('expense')} className={`flex-1 md:flex-none px-4 py-1.5 text-sm rounded-md transition-colors ${filterType === 'expense' ? 'bg-white shadow-sm font-medium text-rose-600' : 'text-slate-500 hover:text-slate-800'}`}>Расходы</button>
-              </div>
-            </div>
-
-            {/* Фильтры: Категория и Даты */}
-            <div className="flex flex-col md:flex-row gap-4 items-end bg-slate-50 p-3 rounded-lg border border-slate-100">
-              <div className="flex-1 w-full">
-                <label className="block text-xs font-medium text-slate-500 mb-1">Категория</label>
-                <select 
-                  value={filterCategory} 
-                  onChange={e => setFilterCategory(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Все категории</option>
-                  {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              </div>
-              <div className="flex-1 w-full">
-                <label className="block text-xs font-medium text-slate-500 mb-1">Дата от</label>
-                <input 
-                  type="date" 
-                  value={filterDateFrom} 
-                  onChange={e => setFilterDateFrom(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="flex-1 w-full">
-                <label className="block text-xs font-medium text-slate-500 mb-1">Дата до</label>
-                <input 
-                  type="date" 
-                  value={filterDateTo} 
-                  onChange={e => setFilterDateTo(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              {(filterCategory || filterDateFrom || filterDateTo || filterType !== 'all') && (
-                <button 
-                  onClick={resetFilters}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors w-full md:w-auto flex items-center justify-center gap-1"
-                >
-                  <Filter size={16} /> Сбросить
-                </button>
-              )}
-            </div>
-          </div>
-          
-          {/* Таблица */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[600px]">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
-                  <th className="p-4 font-medium w-32">Дата</th>
-                  <th className="p-4 font-medium">Категория / Источник</th>
-                  <th className="p-4 font-medium text-right w-40">Сумма</th>
-                  <th className="p-4 font-medium w-32">Статус</th>
-                  <th className="p-4 font-medium text-center w-32">Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTransactions.length === 0 && (
-                  <tr>
-                    <td colSpan="5" className="p-12 text-center">
-                      <div className="flex flex-col items-center justify-center text-slate-400">
-                        <Calendar size={32} className="mb-2 opacity-50" />
-                        <p>Нет операций для отображения</p>
-                        <p className="text-xs mt-1">Измените фильтры или добавьте новую операцию</p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-                {filteredTransactions.map((tx) => (
-                  <tr key={tx.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors group">
-                    <td className="p-4 text-sm whitespace-nowrap text-slate-600 font-medium">{formatDate(tx.date)}</td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${tx.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                          {tx.type === 'income' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                        </div>
-                        <div>
-                          <p className="font-medium text-slate-900">{tx.category}</p>
-                          {tx.comment && <p className="text-xs text-slate-500 mt-0.5">{tx.comment}</p>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className={`p-4 font-bold text-right whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount)}
-                    </td>
-                    <td className="p-4">
-                      {tx.status === 'done' ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                          <CheckCircle2 size={12} /> Выполнено
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                          В плане
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                        {tx.status === 'planned' ? (
-                          <button 
-                            onClick={() => markAsDone(tx.id)}
-                            title="Отметить как выполненное (деньги начислятся/спишутся с факт. баланса)"
-                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                          >
-                            <CheckCircle2 size={18} />
-                          </button>
-                        ) : (
-                          <button 
-                            onClick={() => markAsPlanned(tx.id)}
-                            title="Отменить выполнение (вернуть в план)"
-                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                          >
-                            <Undo2 size={18} />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => openModalForEdit(tx)}
-                          title="Редактировать"
-                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button 
-                          onClick={() => deleteTransaction(tx.id)}
-                          title="Удалить"
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* MODAL (ADD / EDIT) */}
-        {showAddModal && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 className="text-xl font-bold text-slate-800">
-                  {editingTxId ? 'Редактировать операцию' : 'Новая операция'}
-                </h3>
-                <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-700 transition-colors p-1 hover:bg-slate-200 rounded-md">
-                  <X size={20}/>
-                </button>
-              </div>
-              
-              <form onSubmit={handleSubmitTransaction} className="p-6 space-y-5 overflow-y-auto">
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
+            
+            <!-- ФОРМА ДОБАВЛЕНИЯ -->
+            <div class="xl:col-span-1 bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 p-5 md:p-7 h-fit sticky top-6">
+                <div class="flex justify-between items-center mb-5">
+                    <h3 class="text-lg font-bold text-slate-800" id="formTitle">Новая операция</h3>
+                    <button id="cancelEditBtn" class="hidden w-7 h-7 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
                 
-                {/* Переключатель Доход/Расход */}
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                  <button 
-                    type="button" 
-                    onClick={() => setNewTx({...newTx, type: 'income', category: ''})} 
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${newTx.type === 'income' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Поступление
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setNewTx({...newTx, type: 'expense', category: ''})} 
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${newTx.type === 'expense' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Расход
-                  </button>
-                </div>
+                <form id="txForm" class="space-y-5">
+                    <!-- Тип операции -->
+                    <div class="flex p-1 bg-slate-100/80 rounded-2xl" id="typeToggle">
+                        <button type="button" data-type="income" class="type-btn flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-200 bg-white text-emerald-600 shadow-sm">
+                            Поступление
+                        </button>
+                        <button type="button" data-type="expense" class="type-btn flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-200 text-slate-500 hover:text-slate-700">
+                            Расход
+                        </button>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Дата операции</label>
-                  <input 
-                    type="date" 
-                    required 
-                    value={newTx.date} 
-                    onChange={e => setNewTx({...newTx, date: e.target.value})} 
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  />
-                </div>
+                    <!-- Сумма -->
+                    <div class="space-y-1.5">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Сумма (₽) *</label>
+                        <input type="number" id="txAmount" required min="1" step="1" placeholder="0"
+                            class="w-full border-2 border-slate-100 bg-slate-50/50 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 focus:bg-white transition-colors font-bold text-lg text-slate-800"/>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Сумма (₽)</label>
-                  <input 
-                    type="number" 
-                    required 
-                    min="1" 
-                    value={newTx.amount} 
-                    onChange={e => setNewTx({...newTx, amount: e.target.value})} 
-                    placeholder="Например: 50000" 
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  />
-                </div>
+                    <!-- Категория -->
+                    <div class="space-y-2">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider" id="categoryLabel">Категория *</label>
+                        <input type="text" id="txCategory" required list="categoriesList" placeholder="Например: Закупка, Налоги..."
+                            class="w-full border-2 border-slate-100 bg-slate-50/50 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 focus:bg-white transition-colors font-medium text-sm text-slate-800"/>
+                        <datalist id="categoriesList"></datalist>
+                        
+                        <!-- Быстрые теги -->
+                        <div id="quickTags" class="flex flex-wrap gap-1.5 mt-1"></div>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Категория / Источник</label>
-                  <input 
-                    type="text" 
-                    required 
-                    value={newTx.category} 
-                    onChange={e => setNewTx({...newTx, category: e.target.value})} 
-                    placeholder={newTx.type === 'income' ? "Ozon, Wildberries..." : "Закупка, Реклама..."} 
-                    list={newTx.type === 'income' ? "income-categories" : "expense-categories"} 
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  />
-                  {/* Разделенные дата-листы для доходов и расходов */}
-                  <datalist id="income-categories">
-                    {incomeCategories.map(cat => <option key={cat} value={cat} />)}
-                  </datalist>
-                  <datalist id="expense-categories">
-                    {expenseCategories.map(cat => <option key={cat} value={cat} />)}
-                  </datalist>
-                </div>
+                    <!-- Дата -->
+                    <div class="space-y-2 pt-2 border-t border-slate-100">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Дата *</label>
+                        <input type="date" id="txDate" required
+                            class="w-full border-2 border-slate-100 bg-slate-50/50 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 focus:bg-white transition-colors font-medium text-sm text-slate-800"/>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="setQuickDate(-1)" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200">Вчера</button>
+                            <button type="button" onclick="setQuickDate(0)" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100">Сегодня</button>
+                            <button type="button" onclick="setQuickDate(1)" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200">Завтра</button>
+                        </div>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Комментарий <span className="text-slate-400 font-normal">(необязательно)</span></label>
-                  <input 
-                    type="text" 
-                    value={newTx.comment} 
-                    onChange={e => setNewTx({...newTx, comment: e.target.value})} 
-                    placeholder="Краткое описание" 
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  />
-                </div>
+                    <!-- Статус -->
+                    <div class="space-y-1.5 pt-2 border-t border-slate-100">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                            <span>Статус</span>
+                            <span id="autoStatusLabel" class="text-emerald-500">Авто: Факт</span>
+                        </label>
+                        <select id="txStatus" class="w-full border-2 border-slate-100 bg-slate-50/50 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 focus:bg-white transition-colors font-semibold text-sm text-slate-800 appearance-none cursor-pointer">
+                            <option value="completed">✅ Исполнено (Деньги получены/списаны)</option>
+                            <option value="planned">⏳ Ожидается (Только в планах)</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Комментарий -->
+                    <div class="space-y-1.5 pt-2 border-t border-slate-100">
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">Комментарий</label>
+                        <textarea id="txComment" rows="2" placeholder="Дополнительная информация..."
+                            class="w-full border-2 border-slate-100 bg-slate-50/50 rounded-xl px-4 py-2 outline-none focus:border-indigo-500 focus:bg-white transition-colors text-sm text-slate-800 resize-none"></textarea>
+                    </div>
 
-                <div className="pt-4 flex gap-3 border-t border-slate-100">
-                  <button 
-                    type="button" 
-                    onClick={() => setShowAddModal(false)} 
-                    className="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors"
-                  >
-                    Отмена
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm"
-                  >
-                    {editingTxId ? 'Сохранить' : 'Добавить'}
-                  </button>
-                </div>
-              </form>
+                    <button type="submit" id="submitBtn" class="w-full py-3.5 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 shadow-lg mt-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 shadow-emerald-200">
+                        <i data-lucide="plus" class="w-5 h-5" id="submitIcon"></i>
+                        <span id="submitText">Добавить поступление</span>
+                    </button>
+                </form>
             </div>
-          </div>
-        )}
 
-      </div>
+            <!-- СПИСОК ОПЕРАЦИЙ -->
+            <div class="xl:col-span-2 bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 p-5 md:p-7 flex flex-col">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <h3 class="text-lg font-bold text-slate-800">Операции</h3>
+                    
+                    <div class="flex flex-wrap bg-slate-50 p-1 rounded-xl border border-slate-200/60 gap-1 w-full sm:w-auto">
+                        <select id="filterType" class="text-xs font-bold bg-transparent border-none outline-none text-slate-600 pl-2 pr-6 py-1.5 cursor-pointer flex-1 sm:flex-none">
+                            <option value="all">Все типы</option>
+                            <option value="income">Поступления</option>
+                            <option value="expense">Расходы</option>
+                        </select>
+                        <div class="hidden sm:block w-px bg-slate-200 mx-1"></div>
+                        <select id="filterStatus" class="text-xs font-bold bg-transparent border-none outline-none text-slate-600 pl-2 pr-6 py-1.5 cursor-pointer flex-1 sm:flex-none">
+                            <option value="all">Все статусы</option>
+                            <option value="planned">Ожидаются</option>
+                            <option value="completed">Исполнены</option>
+                        </select>
+                        <div class="hidden sm:block w-px bg-slate-200 mx-1"></div>
+                        <select id="filterCategory" class="text-xs font-bold bg-transparent border-none outline-none text-slate-600 pl-2 pr-6 py-1.5 cursor-pointer max-w-[140px] truncate flex-1 sm:flex-none">
+                            <option value="all">Все категории</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="transactionsList" class="flex-1 overflow-x-auto">
+                    <!-- Транзакции будут отрендерены здесь JS-скриптом -->
+                </div>
+            </div>
+
+        </div>
     </div>
-  );
-}
+
+    <!-- ОСНОВНОЙ СКРИПТ (ЛОГИКА) -->
+    <script>
+        // --- КОНСТАНТЫ И УТИЛИТЫ ---
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+        };
+        const formatDate = (dateString) => new Date(dateString).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+        const getTodayString = () => new Date().toISOString().split('T')[0];
+        const addDays = (dateString, days) => {
+            const d = new Date(dateString);
+            d.setDate(d.getDate() + days);
+            return d.toISOString().split('T')[0];
+        };
+        const getRelativeDateLabel = (dateString) => {
+            const today = getTodayString();
+            if (dateString === today) return 'Сегодня';
+            if (dateString === addDays(today, 1)) return 'Завтра';
+            if (dateString === addDays(today, -1)) return 'Вчера';
+            return `${formatDate(dateString)}, ${new Date(dateString).toLocaleDateString('ru-RU', { weekday: 'short' })}`;
+        };
+
+        const defaultCategories = ['Закупка товара', 'Реклама', 'Кредит / займ', 'Логистика', 'Налоги', 'Прочее', 'Ozon', 'Wildberries', 'Яндекс.Маркет'];
+        const quickCategories = {
+            income: ['Ozon', 'Wildberries', 'Яндекс.Маркет', 'Прочее'],
+            expense: ['Закупка товара', 'Логистика', 'Реклама', 'Налоги']
+        };
+
+        // --- СОСТОЯНИЕ ПРИЛОЖЕНИЯ ---
+        let state = {
+            transactions: JSON.parse(localStorage.getItem('fin_dashboard_txs')) || [],
+            currentBalance: Number(localStorage.getItem('fin_dashboard_balance')) || 0,
+            forecastDays: 30,
+            
+            form: {
+                id: null,
+                type: 'income', // income | expense
+                amount: '',
+                date: getTodayString(),
+                category: '',
+                status: 'completed',
+                comment: ''
+            },
+            
+            filters: {
+                type: 'all',
+                status: 'all',
+                category: 'all'
+            },
+            
+            calculated: { chartData: [], cashGaps: [], overdueTxs: [] },
+            hoveredPoint: null
+        };
+
+        // Кэширование DOM элементов
+        const els = {
+            currentBalanceInput: document.getElementById('currentBalanceInput'),
+            forecastDaysInput: document.getElementById('forecastDaysInput'),
+            alertsContainer: document.getElementById('alertsContainer'),
+            chartWrapper: document.getElementById('chartWrapper'),
+            transactionsList: document.getElementById('transactionsList'),
+            
+            // Форма
+            form: document.getElementById('txForm'),
+            formTitle: document.getElementById('formTitle'),
+            cancelEditBtn: document.getElementById('cancelEditBtn'),
+            txAmount: document.getElementById('txAmount'),
+            txCategory: document.getElementById('txCategory'),
+            txDate: document.getElementById('txDate'),
+            txStatus: document.getElementById('txStatus'),
+            txComment: document.getElementById('txComment'),
+            typeBtns: document.querySelectorAll('.type-btn'),
+            quickTags: document.getElementById('quickTags'),
+            categoriesList: document.getElementById('categoriesList'),
+            autoStatusLabel: document.getElementById('autoStatusLabel'),
+            submitBtn: document.getElementById('submitBtn'),
+            submitText: document.getElementById('submitText'),
+            submitIcon: document.getElementById('submitIcon'),
+            
+            // Фильтры
+            filterType: document.getElementById('filterType'),
+            filterStatus: document.getElementById('filterStatus'),
+            filterCategory: document.getElementById('filterCategory')
+        };
+
+        // --- ЛОГИКА РАСЧЕТОВ ---
+        function calculateData() {
+            const data = [];
+            const gaps = [];
+            const overdue = [];
+            let runningBalance = state.currentBalance;
+            const startDate = getTodayString();
+
+            // Просрочки
+            state.transactions.forEach(tx => {
+                if (tx.status === 'planned' && tx.date < startDate) overdue.push(tx);
+            });
+
+            // Группировка
+            const txByDate = state.transactions.reduce((acc, tx) => {
+                if (!acc[tx.date]) acc[tx.date] = { incomes: [], expenses: [] };
+                if (tx.type === 'income') acc[tx.date].incomes.push(tx);
+                else acc[tx.date].expenses.push(tx);
+                return acc;
+            }, {});
+
+            for (let i = 0; i <= state.forecastDays; i++) {
+                const currentDate = addDays(startDate, i);
+                const dayTxs = txByDate[currentDate] || { incomes: [], expenses: [] };
+                
+                const dayIncomeSum = dayTxs.incomes.reduce((sum, tx) => sum + Number(tx.amount), 0);
+                const dayExpenseSum = dayTxs.expenses.reduce((sum, tx) => sum + Number(tx.amount), 0);
+                
+                runningBalance += dayIncomeSum - dayExpenseSum;
+
+                if (runningBalance < 0) gaps.push({ date: currentDate, amountMissing: Math.abs(runningBalance) });
+
+                data.push({
+                    date: currentDate,
+                    balance: runningBalance,
+                    dayIncomeSum, dayExpenseSum,
+                    hasTransactions: dayTxs.incomes.length > 0 || dayTxs.expenses.length > 0
+                });
+            }
+
+            state.calculated = { chartData: data, cashGaps: gaps, overdueTxs: overdue };
+            
+            // Сохраняем в локальное хранилище
+            localStorage.setItem('fin_dashboard_txs', JSON.stringify(state.transactions));
+            localStorage.setItem('fin_dashboard_balance', state.currentBalance.toString());
+        }
+
+        // --- РЕНДЕРИНГ ---
+        function renderApp() {
+            calculateData();
+            renderHeader();
+            renderAlerts();
+            renderChart();
+            renderForm();
+            renderList();
+            renderFilters();
+            lucide.createIcons(); // Перерисовываем иконки после вставки HTML
+        }
+
+        function renderHeader() {
+            els.currentBalanceInput.value = state.currentBalance || '';
+            els.forecastDaysInput.value = state.forecastDays;
+        }
+
+        function renderAlerts() {
+            let html = '';
+            
+            if (state.calculated.overdueTxs.length > 0) {
+                html += `
+                <div class="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/60 rounded-3xl p-5 shadow-sm">
+                    <h3 class="text-orange-800 font-bold flex items-center gap-2 mb-3 text-sm md:text-base">
+                        <i data-lucide="clock" class="w-5 h-5 text-orange-600"></i>
+                        Забытые операции (${state.calculated.overdueTxs.length})
+                    </h3>
+                    <div class="flex flex-wrap gap-2">
+                        ${state.calculated.overdueTxs.slice(0, 2).map(tx => `
+                            <div class="bg-white/60 text-xs font-semibold px-3 py-1.5 rounded-lg border border-orange-100 text-orange-800 flex items-center gap-2 cursor-pointer hover:bg-white" onclick="editTransaction('${tx.id}')">
+                                ${tx.category} <span class="${tx.type === 'expense' ? 'text-rose-500' : 'text-emerald-500'}">${tx.type === 'expense' ? '-' : '+'}${tx.amount} ₽</span>
+                            </div>
+                        `).join('')}
+                        ${state.calculated.overdueTxs.length > 2 ? `<div class="text-xs text-orange-600 font-medium py-1.5 px-1">и еще ${state.calculated.overdueTxs.length - 2}</div>` : ''}
+                    </div>
+                </div>`;
+            }
+
+            if (state.calculated.cashGaps.length > 0) {
+                html += `
+                <div class="bg-gradient-to-r from-rose-50 to-red-50 border border-rose-200/60 rounded-3xl p-5 shadow-sm ${state.calculated.overdueTxs.length === 0 ? 'md:col-span-2' : ''}">
+                    <h3 class="text-rose-800 font-bold flex items-center gap-2 mb-3 text-sm md:text-base">
+                        <i data-lucide="alert-triangle" class="w-5 h-5 text-rose-600"></i>
+                        Угроза кассового разрыва (${state.calculated.cashGaps.length} дн.)
+                    </h3>
+                    <div class="flex flex-wrap gap-2">
+                        ${state.calculated.cashGaps.slice(0, 3).map(gap => `
+                            <div class="bg-white/60 text-xs font-semibold px-3 py-1.5 rounded-lg border border-rose-100 text-rose-800 flex items-center gap-2">
+                                ${formatDate(gap.date)} <span class="text-rose-600 font-bold">-${gap.amountMissing} ₽</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+            }
+
+            els.alertsContainer.innerHTML = html;
+        }
+
+        function renderChart() {
+            const data = state.calculated.chartData;
+            if (data.length === 0) {
+                els.chartWrapper.innerHTML = '';
+                return;
+            }
+
+            const width = 1000, height = 300;
+            const padding = { top: 20, right: 30, bottom: 40, left: 90 };
+            const chartW = width - padding.left - padding.right;
+            const chartH = height - padding.top - padding.bottom;
+
+            const balances = data.map(d => d.balance);
+            const minBalance = Math.min(0, ...balances, state.currentBalance - 5000); 
+            const maxBalance = Math.max(10000, ...balances, state.currentBalance + 5000); 
+            const range = maxBalance - minBalance || 10000;
+
+            const getX = (i) => padding.left + (i / (data.length - 1)) * chartW;
+            const getY = (val) => padding.top + chartH - ((val - minBalance) / range) * chartH;
+
+            const pathD = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.balance)}`).join(' ');
+            const zeroPercent = range === 0 ? 0 : Math.max(0, Math.min(100, (maxBalance / range) * 100));
+            const yZero = getY(0);
+
+            let gridHtml = '';
+            for(let i=0; i<5; i++) {
+                const yVal = minBalance + (range * i) / 4;
+                const yPos = getY(yVal);
+                gridHtml += `
+                    <line x1="${padding.left}" y1="${yPos}" x2="${width - padding.right}" y2="${yPos}" stroke="#f1f5f9" stroke-width="1" />
+                    <text x="${padding.left - 15}" y="${yPos + 4}" text-anchor="end" font-size="11" fill="#94a3b8" font-weight="500">${formatCurrency(yVal).replace(',00', '')}</text>
+                `;
+            }
+
+            let pointsHtml = '';
+            let hoverZonesHtml = '';
+            data.forEach((d, i) => {
+                const xPos = getX(i);
+                const showDate = i % Math.max(1, Math.ceil(data.length / 10)) === 0 || i === data.length - 1;
+                
+                if (showDate) {
+                    pointsHtml += `<text x="${xPos}" y="${height - 5}" text-anchor="middle" font-size="11" fill="#64748b" font-weight="500">${formatDate(d.date)}</text>`;
+                }
+                if (d.hasTransactions) {
+                    pointsHtml += `<circle cx="${xPos}" cy="${getY(d.balance)}" r="3.5" fill="#fff" stroke="${d.balance >= 0 ? '#10b981' : '#f43f5e'}" stroke-width="2.5" filter="url(#shadow)" id="circle-${i}" class="transition-all duration-200"></circle>`;
+                }
+
+                // Невидимые зоны для наведения мыши
+                hoverZonesHtml += `<rect x="${xPos - chartW / data.length / 2}" y="${padding.top}" width="${chartW / data.length}" height="${chartH}" fill="transparent" class="cursor-pointer" onmouseenter="handleChartHover(${i})" onmouseleave="handleChartHover(null)"></rect>`;
+            });
+
+            // Тултип HTML
+            let tooltipHtml = '';
+            if (state.hoveredPoint !== null) {
+                const d = data[state.hoveredPoint];
+                tooltipHtml = `
+                    <line x1="${getX(state.hoveredPoint)}" y1="${padding.top}" x2="${getX(state.hoveredPoint)}" y2="${height - padding.bottom}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,3" opacity="0.6" pointer-events="none"></line>
+                    <div class="absolute bg-slate-800 text-white p-3.5 rounded-xl shadow-xl text-xs z-10 pointer-events-none transform -translate-x-1/2 -translate-y-full mt-[-15px] min-w-[160px] border border-slate-700/50"
+                         style="left: max(10%, min(90%, ${(state.hoveredPoint / (data.length - 1)) * 100}%)); top: 50%;">
+                        <div class="font-bold border-b border-slate-600/50 pb-1.5 mb-1.5 text-slate-200">${getRelativeDateLabel(d.date)}</div>
+                        <div class="space-y-1">
+                            <p class="flex justify-between gap-3"><span class="text-slate-400">Баланс:</span> <span class="font-bold ${d.balance < 0 ? 'text-rose-400' : 'text-emerald-400'}">${formatCurrency(d.balance)}</span></p>
+                            ${d.dayIncomeSum > 0 ? `<p class="flex justify-between gap-3"><span class="text-slate-400">Приход:</span> <span class="text-emerald-400">+${formatCurrency(d.dayIncomeSum)}</span></p>` : ''}
+                            ${d.dayExpenseSum > 0 ? `<p class="flex justify-between gap-3"><span class="text-slate-400">Расход:</span> <span class="text-rose-400">-${formatCurrency(d.dayExpenseSum)}</span></p>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            els.chartWrapper.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}" class="w-full h-auto overflow-visible font-sans">
+                    <defs>
+                        <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="${zeroPercent}%" stop-color="#10b981" />
+                            <stop offset="${zeroPercent}%" stop-color="#f43f5e" />
+                        </linearGradient>
+                        <linearGradient id="areaPos" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981" stop-opacity="0.15"/><stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/></linearGradient>
+                        <linearGradient id="areaNeg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f43f5e" stop-opacity="0.0"/><stop offset="100%" stop-color="#f43f5e" stop-opacity="0.15"/></linearGradient>
+                        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.06" /></filter>
+                        <clipPath id="cPos"><rect x="0" y="0" width="${width}" height="${yZero}" /></clipPath>
+                        <clipPath id="cNeg"><rect x="0" y="${yZero}" width="${width}" height="${height - yZero}" /></clipPath>
+                    </defs>
+                    ${gridHtml}
+                    <path d="${pathD} L ${getX(data.length - 1)} ${yZero} L ${getX(0)} ${yZero} Z" fill="url(#areaPos)" clip-path="url(#cPos)" />
+                    <path d="${pathD} L ${getX(data.length - 1)} ${yZero} L ${getX(0)} ${yZero} Z" fill="url(#areaNeg)" clip-path="url(#cNeg)" />
+                    <line x1="${padding.left}" y1="${yZero}" x2="${width - padding.right}" y2="${yZero}" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4,4" />
+                    <path d="${pathD}" fill="none" stroke="url(#lineGrad)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#shadow)" />
+                    ${pointsHtml}
+                    ${hoverZonesHtml}
+                </svg>
+                ${tooltipHtml}
+            `;
+            
+            // Если есть наведенная точка, увеличиваем её кружок
+            if(state.hoveredPoint !== null) {
+                const circle = document.getElementById(`circle-${state.hoveredPoint}`);
+                if(circle) circle.setAttribute('r', '6');
+            }
+        }
+
+        // Вызывается из HTML (onmouseenter/leave)
+        window.handleChartHover = function(index) {
+            if (state.hoveredPoint !== index) {
+                state.hoveredPoint = index;
+                renderChart();
+            }
+        };
+
+        function renderForm() {
+            // Кнопки типа
+            els.typeBtns.forEach(btn => {
+                const isActive = btn.dataset.type === state.form.type;
+                if (isActive) {
+                    btn.className = `type-btn flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-200 bg-white shadow-sm ${state.form.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`;
+                } else {
+                    btn.className = `type-btn flex-1 py-2 text-sm font-bold rounded-xl transition-all duration-200 text-slate-500 hover:text-slate-700`;
+                }
+            });
+
+            // Значения инпутов
+            els.txAmount.value = state.form.amount;
+            els.txDate.value = state.form.date;
+            els.txCategory.value = state.form.category;
+            els.txStatus.value = state.form.status;
+            els.txComment.value = state.form.comment;
+
+            // Умный статус текст
+            const isFuture = state.form.date > getTodayString();
+            els.autoStatusLabel.textContent = isFuture ? 'Авто: План' : 'Авто: Факт';
+            els.autoStatusLabel.className = isFuture ? 'text-indigo-500' : 'text-emerald-500';
+
+            // Теги
+            els.quickTags.innerHTML = quickCategories[state.form.type].map(tag => 
+                `<button type="button" onclick="setQuickCategory('${tag}')" class="text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-md transition-colors">${tag}</button>`
+            ).join('');
+
+            // Даталист
+            els.categoriesList.innerHTML = defaultCategories.map(c => `<option value="${c}"></option>`).join('');
+
+            // Состояния редактирования
+            els.formTitle.textContent = state.form.id ? 'Редактировать' : 'Новая операция';
+            els.cancelEditBtn.classList.toggle('hidden', !state.form.id);
+            
+            // Кнопка сабмита
+            els.submitBtn.className = `w-full py-3.5 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 shadow-lg mt-2 ${state.form.type === 'income' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 shadow-emerald-200' : 'bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 shadow-rose-200'}`;
+            els.submitIcon.setAttribute('data-lucide', state.form.id ? 'check-circle' : 'plus');
+            els.submitText.textContent = state.form.id ? 'Сохранить изменения' : (state.form.type === 'income' ? 'Добавить поступление' : 'Добавить расход');
+        }
+
+        // Вызываются из HTML
+        window.setQuickDate = function(days) {
+            state.form.date = addDays(getTodayString(), days);
+            state.form.status = state.form.date > getTodayString() ? 'planned' : 'completed';
+            renderForm();
+        };
+        window.setQuickCategory = function(cat) {
+            state.form.category = cat;
+            renderForm();
+        };
+
+        function renderList() {
+            let filtered = state.transactions
+                .filter(tx => state.filters.type === 'all' || tx.type === state.filters.type)
+                .filter(tx => state.filters.status === 'all' || tx.status === state.filters.status)
+                .filter(tx => state.filters.category === 'all' || tx.category === state.filters.category)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            if (filtered.length === 0) {
+                els.transactionsList.innerHTML = `
+                    <div class="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-8 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
+                        <div class="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-300 mb-4"><i data-lucide="inbox" class="w-8 h-8"></i></div>
+                        <h4 class="text-base font-bold text-slate-700 mb-1">Здесь пока пусто</h4>
+                        <p class="text-sm text-slate-500 max-w-sm">Добавьте вашу первую операцию слева.</p>
+                    </div>`;
+                return;
+            }
+
+            // Группировка
+            const grouped = {};
+            filtered.forEach(tx => {
+                if (!grouped[tx.date]) grouped[tx.date] = [];
+                grouped[tx.date].push(tx);
+            });
+
+            let html = '<div class="space-y-6 pb-4">';
+            const todayStr = getTodayString();
+
+            for (const [dateStr, txs] of Object.entries(grouped)) {
+                html += `
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-3 sticky top-0 bg-white/90 backdrop-blur-sm py-2 z-10 border-b border-slate-100">
+                            <div class="text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-3 py-1 rounded-md">${getRelativeDateLabel(dateStr)}</div>
+                            <div class="h-px bg-slate-100 flex-1"></div>
+                        </div>
+                        <div class="grid gap-2">
+                            ${txs.map(tx => {
+                                const isOverdue = tx.status === 'planned' && tx.date < todayStr;
+                                return `
+                                <div class="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors group">
+                                    <div class="flex items-center gap-4 flex-1 min-w-0">
+                                        <button onclick="toggleStatus('${tx.id}')" class="shrink-0 focus:outline-none flex items-center justify-center w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-200 transition-colors">
+                                            ${tx.status === 'completed' ? '<i data-lucide="check-circle" class="w-5 h-5 text-emerald-500"></i>' : '<i data-lucide="circle" class="w-5 h-5 text-slate-300 group-hover:text-slate-400"></i>'}
+                                        </button>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-sm font-bold text-slate-800 truncate">${tx.category}</span>
+                                                ${isOverdue ? '<span class="shrink-0 text-[10px] font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Просрочено</span>' : ''}
+                                                ${!isOverdue && tx.status === 'planned' ? '<span class="shrink-0 text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">План</span>' : ''}
+                                            </div>
+                                            ${tx.comment ? `<div class="text-xs font-medium text-slate-500 truncate mt-0.5">${tx.comment}</div>` : ''}
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-4 shrink-0 pl-4">
+                                        <div class="text-base font-bold whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-800'}">
+                                            ${tx.type === 'income' ? '+' : '-'} ${formatCurrency(tx.amount)}
+                                        </div>
+                                        <div class="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onclick="editTransaction('${tx.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 bg-slate-50 sm:bg-transparent hover:bg-indigo-50 hover:text-indigo-600 transition-colors"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                                            <button onclick="deleteTransaction('${tx.id}')" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 bg-slate-50 sm:bg-transparent hover:bg-rose-50 hover:text-rose-600 transition-colors"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                                        </div>
+                                    </div>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </div>`;
+            }
+            html += '</div>';
+            els.transactionsList.innerHTML = html;
+        }
+
+        function renderFilters() {
+            const uniqueCats = [...new Set(state.transactions.map(t => t.category))].filter(Boolean).sort();
+            els.filterCategory.innerHTML = `<option value="all">Все категории</option>` + 
+                uniqueCats.map(c => `<option value="${c}" ${state.filters.category === c ? 'selected' : ''}>${c}</option>`).join('');
+            
+            els.filterType.value = state.filters.type;
+            els.filterStatus.value = state.filters.status;
+        }
+
+
+        // --- ОБРАБОТЧИКИ СОБЫТИЙ И ACTIONS ---
+        
+        window.toggleStatus = function(id) {
+            state.transactions = state.transactions.map(t => t.id === id ? { ...t, status: t.status === 'planned' ? 'completed' : 'planned' } : t);
+            renderApp();
+        };
+
+        window.deleteTransaction = function(id) {
+            if (confirm('Удалить эту операцию?')) {
+                state.transactions = state.transactions.filter(t => t.id !== id);
+                renderApp();
+            }
+        };
+
+        window.editTransaction = function(id) {
+            const tx = state.transactions.find(t => t.id === id);
+            if(tx) {
+                state.form = { ...tx };
+                renderForm();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        };
+
+        // Слушатели формы
+        els.typeBtns.forEach(btn => btn.addEventListener('click', (e) => {
+            state.form.type = e.target.dataset.type;
+            renderForm();
+        }));
+
+        els.txDate.addEventListener('change', (e) => {
+            state.form.date = e.target.value;
+            state.form.status = e.target.value > getTodayString() ? 'planned' : 'completed';
+            renderForm();
+        });
+
+        // Синхронизация полей формы со state при вводе
+        ['amount', 'category', 'status', 'comment'].forEach(key => {
+            els[`tx${key.charAt(0).toUpperCase() + key.slice(1)}`].addEventListener('input', (e) => {
+                state.form[key] = e.target.value;
+            });
+        });
+
+        els.form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (!state.form.amount || !state.form.date || !state.form.category) return;
+
+            const newTx = {
+                ...state.form,
+                id: state.form.id || Date.now().toString(),
+                amount: Number(state.form.amount)
+            };
+
+            if (state.form.id) {
+                state.transactions = state.transactions.map(t => t.id === state.form.id ? newTx : t);
+            } else {
+                state.transactions.push(newTx);
+            }
+
+            // Сброс формы
+            state.form = { id: null, type: state.form.type, amount: '', date: getTodayString(), category: '', status: 'completed', comment: '' };
+            renderApp();
+        });
+
+        els.cancelEditBtn.addEventListener('click', () => {
+            state.form = { id: null, type: 'income', amount: '', date: getTodayString(), category: '', status: 'completed', comment: '' };
+            renderForm();
+        });
+
+        // Слушатели глобальных настроек
+        els.currentBalanceInput.addEventListener('input', (e) => {
+            state.currentBalance = Number(e.target.value) || 0;
+            renderApp();
+        });
+        
+        els.forecastDaysInput.addEventListener('change', (e) => {
+            state.forecastDays = Number(e.target.value) || 30;
+            renderApp();
+        });
+
+        // Слушатели фильтров
+        ['Type', 'Status', 'Category'].forEach(filter => {
+            els[`filter${filter}`].addEventListener('change', (e) => {
+                state.filters[filter.toLowerCase()] = e.target.value;
+                renderApp();
+            });
+        });
+
+        // ИНИЦИАЛИЗАЦИЯ
+        renderApp();
+
+    </script>
+</body>
+</html>
